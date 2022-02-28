@@ -101,7 +101,7 @@ int main(int argc, char *argv[]) {
 }
 
 int initializeUser(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_willOptions wopts, char* userID){
-	int client = 0;
+	int client;
   char* userTopic = strcat(userID,"_control");
 
   //Initialize broker connection.
@@ -118,7 +118,6 @@ int initializeUser(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_w
 	opts.will->qos = 1;
 	opts.will->retained = 0;
 	opts.will->topicName = userTopic;
-	opts.will = NULL;
 
 	client = MQTTClient_connect(conn, &opts);
   
