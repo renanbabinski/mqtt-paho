@@ -20,8 +20,10 @@ Trabalho: SIMULAÇÃO DE UM CHAT UM PRA UM E CHAT EM GRUPO*/
 #define TIMEOUT     10000L
 #define DEBUG       1
 
-//User inicialization.
+//User initialization.
 int initializeUser(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_willOptions wopts, char* userID);
+//User online status publication.
+int setUserOnline(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_willOptions wopts, char* userID);
 
 int geth(){                                        //PRESSIONE PARA CONTINUAR (PAUSE)
 	char s;
@@ -50,11 +52,18 @@ int main(int argc, char *argv[]) {
 	MQTTClient conn;
 	MQTTClient_connectOptions opts = MQTTClient_connectOptions_initializer;
 	MQTTClient_willOptions wopts = MQTTClient_willOptions_initializer;
+  
   int menu;
   char* userID = argv[1];
 
+  //Initialize broker connection.
+  if (MQTTClient_create(&conn, ADDRESS, userID, MQTTCLIENT_PERSISTENCE_NONE, NULL) != MQTTCLIENT_SUCCESS){
+    printf("An error has occured while initializing Client!");
+    exit(EXIT_FAILURE);
+  }
+
   //User inicialization.
-  if(initializeUser(conn, opts, wopts, userID)){
+  if(initializeUser(conn, opts, wopts, userID) && setUserOnline(conn, opts, wopts, userID)){
 
     while((menu = list_menu())!= 0){
       switch (menu) {
@@ -102,29 +111,28 @@ int main(int argc, char *argv[]) {
 
 int initializeUser(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_willOptions wopts, char* userID){
 	int client;
-  char* userTopic = strcat(userID,"_control");
+  char userControlTopic[50];
 
-  //Initialize broker connection.
-	client = MQTTClient_create(&conn, ADDRESS, userID, MQTTCLIENT_PERSISTENCE_NONE, NULL);
-	if (client != MQTTCLIENT_SUCCESS) return 0;
-  
+  strcpy(userControlTopic, userID);
+  strcat(userControlTopic,"_Control");
+ 
 	opts.keepAliveInterval = 20;
 	opts.cleansession = 1;
 	opts.MQTTVersion = MQTTVERSION_DEFAULT;
 	opts.username = userID;
 
 	opts.will = &wopts;
-	opts.will->message = userID;
+	opts.will->message = "DISCONNECTED";
 	opts.will->qos = 1;
 	opts.will->retained = 0;
-	opts.will->topicName = userTopic;
+	opts.will->topicName = userControlTopic;
 
 	client = MQTTClient_connect(conn, &opts);
   
 	if (client != MQTTCLIENT_SUCCESS) return 0;
 
   //userTopic subscription.
-	client = MQTTClient_subscribe(conn, userTopic, 0);
+	client = MQTTClient_subscribe(conn, userControlTopic, 0);
 
   if (client != MQTTCLIENT_SUCCESS) return 0;
 
@@ -133,11 +141,30 @@ int initializeUser(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_w
     MQTTClient_message pubmsg = MQTTClient_message_initializer;
     MQTTClient_deliveryToken dt;
     pubmsg.payload = "Testeando";
-    pubmsg.payloadlen = 9;
+    pubmsg.payloadlen = strlen(pubmsg.payload);
     pubmsg.qos = 0;
     pubmsg.retained = 0;
-    client = MQTTClient_publish(conn, userTopic, pubmsg.payloadlen, pubmsg.payload, pubmsg.qos, pubmsg.retained, &dt);
+    client = MQTTClient_publish(conn, userControlTopic, pubmsg.payloadlen, pubmsg.payload, pubmsg.qos, pubmsg.retained, &dt);
   }
 	
+  return 1;
+}
+
+int setUserOnline(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_willOptions wopts, char* userID){
+  int client;
+  char* userTopic = "USERS";
+  char payload[100];
+
+  MQTTClient_message pubmsg = MQTTClient_message_initializer;
+  MQTTClient_deliveryToken dt;
+  sprintf(payload, "USER:%s-STATUS:ONLINE",userID);
+  pubmsg.payload = payload;
+  pubmsg.payloadlen = strlen(pubmsg.payload);
+  pubmsg.qos = 1;
+  pubmsg.retained = 0;
+  client = MQTTClient_publish(conn, userTopic, pubmsg.payloadlen, pubmsg.payload, pubmsg.qos, pubmsg.retained, &dt);
+  
+  if (client != MQTTCLIENT_SUCCESS) return 0;
+
   return 1;
 }
