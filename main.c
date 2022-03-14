@@ -27,6 +27,10 @@ int initializeUser(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_w
 int setUserOnline(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_willOptions wopts, char* userID);
 //User offline status publication
 int setUserOffline(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_willOptions wopts, char* userID);
+//List users ONLINE/OFFLINE
+int listUsersStatus(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_willOptions wopts, char* userID);
+//Message arrived function
+int msgarrvd(void *context, char *topicName, int topicLen, MQTTClient_message *message);
 
 int geth(){                                        //PRESSIONE PARA CONTINUAR (PAUSE)
 	char s;
@@ -71,7 +75,10 @@ int main(int argc, char *argv[]) {
     while((menu = list_menu())!= 0){
       switch (menu) {
         case 1:
-      
+          if(!listUsersStatus(conn, opts, wopts, userID)){
+            printf("An error has occured while listing users status!");
+            menu = 0;
+          }
 
           break;
 
@@ -204,4 +211,47 @@ int setUserOffline(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_w
   if (client != MQTTCLIENT_SUCCESS) return 0;
 
   return 1;
+}
+
+int listUsersStatus(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_willOptions wopts, char* userID){
+  MQTTClient client;
+  MQTTClient_connectOptions conn_opts = MQTTClient_connectOptions_initializer;
+  int rc;
+  int ch;
+  MQTTClient_create(&client, ADDRESS, CLIENTID,
+      MQTTCLIENT_PERSISTENCE_NONE, NULL);
+  conn_opts.keepAliveInterval = 20;
+  conn_opts.cleansession = 1;
+  MQTTClient_setCallbacks(client, NULL, NULL, msgarrvd, NULL);
+  if ((rc = MQTTClient_connect(client, &conn_opts)) != MQTTCLIENT_SUCCESS)
+  {
+      printf("Failed to connect, return code %d\n", rc);
+      exit(EXIT_FAILURE);
+  }
+
+  //userTopic subscription.
+	MQTTClient_subscribe(client, "USERS/#", 0);
+  // if (client != MQTTCLIENT_SUCCESS) return 0;
+
+  do{
+    ch = getchar();
+  } while(ch!='Q' && ch != 'q');
+
+  return 1;
+}
+
+int msgarrvd(void *context, char *topicName, int topicLen, MQTTClient_message *message){
+    int i;
+    char* payloadptr;
+    printf("topic: %s\n", topicName);
+    printf("message: ");
+    payloadptr = message->payload;
+    for(i=0; i<message->payloadlen; i++)
+    {
+        putchar(*payloadptr++);
+    }
+    putchar('\n');
+    MQTTClient_freeMessage(&message);
+    MQTTClient_free(topicName);
+    return 1;
 }
