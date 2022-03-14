@@ -2,6 +2,12 @@
 
 Aplicação de chat implementada sobre o protocolo MQTT.
 
+## Alunos ##
+
+* Renan Babinski
+* Rodolfo Trevisol
+* Darlan Schmitz
+
 ## Dependencias: ##  
 
 ### Instalação da biblioteca Paho (Client side):
