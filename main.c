@@ -1,4 +1,4 @@
-//gcc main.c -o mqtt_exemplo -lpaho-mqtt3c -Wall
+//gcc main.c -o mqtt_exemplo -lpaho-mqtt3c -ljson-c -Wall
 /*Trabalho de TÓPICOS XIII CHAT MQTT PAHO
 
 Universidade Federal da Fronteira Sul - UFFS - Campus Chapecó-SC
@@ -11,6 +11,7 @@ Trabalho: SIMULAÇÃO DE UM CHAT UM PRA UM E CHAT EM GRUPO*/
 #include <string.h>
 #include "MQTTClient.h"
 #include "MQTTAsync.h"
+#include <json-c/json.h>
 
 #define ADDRESS     "tcp://3.80.198.178:1890"
 #define CLIENTID    "ExampleClientSub"
@@ -24,6 +25,8 @@ Trabalho: SIMULAÇÃO DE UM CHAT UM PRA UM E CHAT EM GRUPO*/
 int initializeUser(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_willOptions wopts, char* userID);
 //User online status publication.
 int setUserOnline(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_willOptions wopts, char* userID);
+//User offline status publication
+int setUserOffline(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_willOptions wopts, char* userID);
 
 int geth(){                                        //PRESSIONE PARA CONTINUAR (PAUSE)
 	char s;
@@ -102,6 +105,9 @@ int main(int argc, char *argv[]) {
 
       }
     }
+    if(!setUserOffline(conn, opts, wopts, userID)){
+      printf("An error has occured while setting user offline!");
+    }
   } else {
     printf("An error has occured while initializing User!");
   }
@@ -157,7 +163,36 @@ int setUserOnline(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_wi
 
   MQTTClient_message pubmsg = MQTTClient_message_initializer;
   MQTTClient_deliveryToken dt;
-  sprintf(payload, "USER:%s-STATUS:ONLINE",userID);
+  sprintf(payload, "{\"USER\" : \"%s\", \"STATUS\" : \"ONLINE\"}", userID);
+  if(DEBUG){
+    json_object *root = json_tokener_parse(payload);
+    printf("The json string: \n\n%s\n\n", json_object_to_json_string(root));
+    printf("The json object to string:\n\n%s\n", json_object_to_json_string_ext(root, JSON_C_TO_STRING_PRETTY));
+  }
+  pubmsg.payload = payload;
+  pubmsg.payloadlen = strlen(pubmsg.payload);
+  pubmsg.qos = 1;
+  pubmsg.retained = 0;
+  client = MQTTClient_publish(conn, userTopic, pubmsg.payloadlen, pubmsg.payload, pubmsg.qos, pubmsg.retained, &dt);
+  
+  if (client != MQTTCLIENT_SUCCESS) return 0;
+
+  return 1;
+}
+
+int setUserOffline(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_willOptions wopts, char* userID){
+  int client;
+  char* userTopic = "USERS";
+  char payload[100];
+
+  MQTTClient_message pubmsg = MQTTClient_message_initializer;
+  MQTTClient_deliveryToken dt;
+  sprintf(payload, "{\"USER\" : \"%s\", \"STATUS\" : \"OFFLINE\"}", userID);
+  if(DEBUG){
+    json_object *root = json_tokener_parse(payload);
+    printf("The json string: \n\n%s\n\n", json_object_to_json_string(root));
+    printf("The json object to string:\n\n%s\n", json_object_to_json_string_ext(root, JSON_C_TO_STRING_PRETTY));
+  }
   pubmsg.payload = payload;
   pubmsg.payloadlen = strlen(pubmsg.payload);
   pubmsg.qos = 1;
