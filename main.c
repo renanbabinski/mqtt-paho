@@ -71,7 +71,7 @@ int main(int argc, char *argv[]) {
     while((menu = list_menu())!= 0){
       switch (menu) {
         case 1:
-
+      
 
           break;
 
@@ -158,11 +158,12 @@ int initializeUser(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_w
 
 int setUserOnline(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_willOptions wopts, char* userID){
   int client;
-  char* userTopic = "USERS";
+  char userTopic[100];
   char payload[100];
 
   MQTTClient_message pubmsg = MQTTClient_message_initializer;
   MQTTClient_deliveryToken dt;
+  sprintf(userTopic, "USERS/%s", userID);
   sprintf(payload, "{\"USER\" : \"%s\", \"STATUS\" : \"ONLINE\"}", userID);
   if(DEBUG){
     json_object *root = json_tokener_parse(payload);
@@ -172,7 +173,7 @@ int setUserOnline(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_wi
   pubmsg.payload = payload;
   pubmsg.payloadlen = strlen(pubmsg.payload);
   pubmsg.qos = 1;
-  pubmsg.retained = 0;
+  pubmsg.retained = 1;
   client = MQTTClient_publish(conn, userTopic, pubmsg.payloadlen, pubmsg.payload, pubmsg.qos, pubmsg.retained, &dt);
   
   if (client != MQTTCLIENT_SUCCESS) return 0;
@@ -182,12 +183,13 @@ int setUserOnline(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_wi
 
 int setUserOffline(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_willOptions wopts, char* userID){
   int client;
-  char* userTopic = "USERS";
+  char userTopic[100];
   char payload[100];
 
   MQTTClient_message pubmsg = MQTTClient_message_initializer;
   MQTTClient_deliveryToken dt;
   sprintf(payload, "{\"USER\" : \"%s\", \"STATUS\" : \"OFFLINE\"}", userID);
+  sprintf(userTopic, "USERS/%s", userID);
   if(DEBUG){
     json_object *root = json_tokener_parse(payload);
     printf("The json string: \n\n%s\n\n", json_object_to_json_string(root));
@@ -196,7 +198,7 @@ int setUserOffline(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_w
   pubmsg.payload = payload;
   pubmsg.payloadlen = strlen(pubmsg.payload);
   pubmsg.qos = 1;
-  pubmsg.retained = 0;
+  pubmsg.retained = 1;
   client = MQTTClient_publish(conn, userTopic, pubmsg.payloadlen, pubmsg.payload, pubmsg.qos, pubmsg.retained, &dt);
   
   if (client != MQTTCLIENT_SUCCESS) return 0;
