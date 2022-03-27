@@ -58,80 +58,6 @@ int list_menu(){
     return menu;
 }
 
-int main(int argc, char *argv[]) {
-	MQTTClient conn;
-	MQTTClient_connectOptions opts = MQTTClient_connectOptions_initializer;
-	MQTTClient_willOptions wopts = MQTTClient_willOptions_initializer;
-  
-  int menu;
-  char* userID = argv[1];
-
-  //Initialize broker connection.
-  if (MQTTClient_create(&conn, ADDRESS, userID, MQTTCLIENT_PERSISTENCE_NONE, NULL) != MQTTCLIENT_SUCCESS){
-    printf("An error has occured while initializing Client!");
-    exit(EXIT_FAILURE);
-  }
-
-  //User inicialization.
-  if(initializeUser(conn, opts, wopts, userID) && setUserOnline(conn, opts, wopts, userID)){
-
-    while((menu = list_menu())!= 0){
-      printf("\n\n\nMENU VALUE: %d\n", menu);
-      switch (menu) {
-        case 1:
-          if(!listUsersStatus(conn, opts, wopts, userID)){
-            printf("An error has occured while listing users status!");
-            menu = 0;
-          }
-
-          break;
-
-        case 2:
-          if(!create_group(conn, opts, wopts, userID)){
-            printf("An error has occured while creating group!");
-            menu = 0;
-          }
-          geth();
-
-          break;
-
-        case 3:
-          printf("\nOPÇÃO 3!\n");
-          geth();
-          break;
-
-        case 4:
-          printf("\nOPÇÃO 4!\n");
-          geth();
-          break;
-
-        case 5:
-          printf("\nOPÇÃO 5!\n");
-          geth();
-          break;
-
-        case 0:
-
-          
-          break;
-
-        default:
-          printf("Opção Inválida\n");
-          geth();
-          break;
-
-      }
-    }
-    if(!setUserOffline(conn, opts, wopts, userID)){
-      printf("An error has occured while setting user offline!");
-    }
-  } else {
-    printf("An error has occured while initializing User!");
-  }
-
-  return 0;
-}
-
 int initializeUser(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_willOptions wopts, char* userID){
 	int client;
   char userControlTopic[50];
@@ -296,4 +222,81 @@ int create_group(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_wil
 
 
   return 1;
+}
+
+
+////////////////////////// MAIN //////////////////////////////
+
+int main(int argc, char *argv[]) {
+	MQTTClient conn;
+	MQTTClient_connectOptions opts = MQTTClient_connectOptions_initializer;
+	MQTTClient_willOptions wopts = MQTTClient_willOptions_initializer;
+  
+  int menu;
+  char* userID = argv[1];
+
+  //Initialize broker connection.
+  if (MQTTClient_create(&conn, ADDRESS, userID, MQTTCLIENT_PERSISTENCE_NONE, NULL) != MQTTCLIENT_SUCCESS){
+    printf("An error has occured while initializing Client!");
+    exit(EXIT_FAILURE);
+  }
+
+  //User inicialization.
+  if(initializeUser(conn, opts, wopts, userID) && setUserOnline(conn, opts, wopts, userID)){
+
+    while((menu = list_menu())!= 0){
+      printf("\n\n\nMENU VALUE: %d\n", menu);
+      switch (menu) {
+        case 1:
+          if(!listUsersStatus(conn, opts, wopts, userID)){
+            printf("An error has occured while listing users status!");
+            menu = 0;
+          }
+
+          break;
+
+        case 2:
+          if(!create_group(conn, opts, wopts, userID)){
+            printf("An error has occured while creating group!");
+            menu = 0;
+          }
+          geth();
+
+          break;
+
+        case 3:
+          printf("\nOPÇÃO 3!\n");
+          geth();
+          break;
+
+        case 4:
+          printf("\nOPÇÃO 4!\n");
+          geth();
+          break;
+
+        case 5:
+          printf("\nOPÇÃO 5!\n");
+          geth();
+          break;
+
+        case 0:
+
+          
+          break;
+
+        default:
+          printf("Opção Inválida\n");
+          geth();
+          break;
+
+      }
+    }
+    if(!setUserOffline(conn, opts, wopts, userID)){
+      printf("An error has occured while setting user offline!");
+    }
+  } else {
+    printf("An error has occured while initializing User!");
+  }
+
+  return 0;
 }
