@@ -10,6 +10,11 @@ Aplicação de chat implementada sobre o protocolo MQTT.
 
 ## Dependencias: ##  
 
+### Instalação dos pacotes de desenvolvimento do OpenSSL:
+* A bibloteca Paho MQTT da suporte à comunicação segura com MQTT (utilizando TLS/SSL), logo os pacotes de desenvolvimento do OpenSSL são necessários para sua compilação e funcionamento. Para instalar os pacotes de desenvolvimento do OpenSSL, execute os comandos a seguir:
+
+        sudo apt-get install libssl-dev
+
 ### Instalação da biblioteca Paho (Client side):
 
 * Linux:  
