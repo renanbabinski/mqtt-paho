@@ -1,4 +1,4 @@
-//gcc main.c -o mqtt_exemplo -lpaho-mqtt3c -ljson-c -Wall
+//gcc main.c -o mqtt_exemplo -lpaho-mqtt3c -ljson-c -lpthread -Wall
 /*Trabalho de TÓPICOS XIII CHAT MQTT PAHO
 
 Universidade Federal da Fronteira Sul - UFFS - Campus Chapecó-SC
@@ -21,7 +21,7 @@ Trabalho: SIMULAÇÃO DE UM CHAT UM PRA UM E CHAT EM GRUPO*/
 #define PAYLOAD     "Hello World!"
 #define QOS         1
 #define TIMEOUT     10000L
-#define DEBUG       0
+#define DEBUG       1
 #define INFO        0
 
 //User initialization.
