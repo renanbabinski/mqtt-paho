@@ -12,6 +12,7 @@ Trabalho: SIMULAÇÃO DE UM CHAT UM PRA UM E CHAT EM GRUPO*/
 #include "MQTTClient.h"
 #include "MQTTAsync.h"
 #include <json-c/json.h>
+#include <pthread.h>
 
 #define ADDRESS     "tcp://3.80.198.178:1890"
 #define CLIENTID    "ExampleClientSub"
@@ -190,8 +191,11 @@ int setUserOnline(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_wi
   pubmsg.payloadlen = strlen(pubmsg.payload);
   pubmsg.qos = 1;
   pubmsg.retained = 1;
+
+  client = MQTTClient_connect(conn, &opts);
+	if (client != MQTTCLIENT_SUCCESS) return 0;
+
   client = MQTTClient_publish(conn, userTopic, pubmsg.payloadlen, pubmsg.payload, pubmsg.qos, pubmsg.retained, &dt);
-  
   if (client != MQTTCLIENT_SUCCESS) return 0;
 
   return 1;
@@ -215,6 +219,8 @@ int setUserOffline(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_w
   pubmsg.payloadlen = strlen(pubmsg.payload);
   pubmsg.qos = 1;
   pubmsg.retained = 1;
+  client = MQTTClient_connect(conn, &opts);
+	if (client != MQTTCLIENT_SUCCESS) return 0;
   client = MQTTClient_publish(conn, userTopic, pubmsg.payloadlen, pubmsg.payload, pubmsg.qos, pubmsg.retained, &dt);
   
   if (client != MQTTCLIENT_SUCCESS) return 0;
