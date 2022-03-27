@@ -75,7 +75,7 @@ int main(int argc, char *argv[]) {
   if(initializeUser(conn, opts, wopts, userID) && setUserOnline(conn, opts, wopts, userID)){
 
     while((menu = list_menu())!= 0){
-      printf("\n\n\nMENU VALUE: %d", menu);
+      printf("\n\n\nMENU VALUE: %d\n", menu);
       switch (menu) {
         case 1:
           if(!listUsersStatus(conn, opts, wopts, userID)){
@@ -86,12 +86,10 @@ int main(int argc, char *argv[]) {
           break;
 
         case 2:
-          printf("\nESTOU AQUI 0!\n");
           if(!create_group(conn, opts, wopts, userID)){
             printf("An error has occured while creating group!");
             menu = 0;
           }
-          printf("\nESTOU AQUI 1!\n");
           geth();
 
           break;
