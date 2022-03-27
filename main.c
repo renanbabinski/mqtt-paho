@@ -31,6 +31,8 @@ int setUserOffline(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_w
 int listUsersStatus(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_willOptions wopts, char* userID);
 //Message arrived function
 int msgarrvd(void *context, char *topicName, int topicLen, MQTTClient_message *message);
+//Group creation
+int create_group(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_willOptions wopts, char* userID);
 
 int geth(){                                        //PRESSIONE PARA CONTINUAR (PAUSE)
 	char s;
@@ -73,6 +75,7 @@ int main(int argc, char *argv[]) {
   if(initializeUser(conn, opts, wopts, userID) && setUserOnline(conn, opts, wopts, userID)){
 
     while((menu = list_menu())!= 0){
+      printf("\n\n\nMENU VALUE: %d", menu);
       switch (menu) {
         case 1:
           if(!listUsersStatus(conn, opts, wopts, userID)){
@@ -83,21 +86,29 @@ int main(int argc, char *argv[]) {
           break;
 
         case 2:
-
+          printf("\nESTOU AQUI 0!\n");
+          if(!create_group(conn, opts, wopts, userID)){
+            printf("An error has occured while creating group!");
+            menu = 0;
+          }
+          printf("\nESTOU AQUI 1!\n");
+          geth();
 
           break;
 
         case 3:
-
+          printf("\nOPÇÃO 3!\n");
+          geth();
           break;
 
         case 4:
-
+          printf("\nOPÇÃO 4!\n");
+          geth();
           break;
 
         case 5:
-
-
+          printf("\nOPÇÃO 5!\n");
+          geth();
           break;
 
         case 0:
@@ -254,4 +265,31 @@ int msgarrvd(void *context, char *topicName, int topicLen, MQTTClient_message *m
     MQTTClient_freeMessage(&message);
     MQTTClient_free(topicName);
     return 1;
+}
+
+int create_group(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_willOptions wopts, char* userID){
+  char* group_name = "TEST_GROUP";
+  int client;
+
+  char* groupTopic = "GROUPS";
+  char payload[100];
+
+  MQTTClient_message pubmsg = MQTTClient_message_initializer;
+  MQTTClient_deliveryToken dt;
+  sprintf(payload, "{\"GROUP_NAME\" : \"%s\", \"OWNER\" : \"%s\", \"CREATED_TIME\" : \"2022-03-15\", \"N_MEMBERS\" : 1}", group_name, userID);
+  if(DEBUG){
+    json_object *root = json_tokener_parse(payload);
+    printf("The json string: \n\n%s\n\n", json_object_to_json_string(root));
+    printf("The json object to string:\n\n%s\n", json_object_to_json_string_ext(root, JSON_C_TO_STRING_PRETTY));
+  }
+  pubmsg.payload = payload;
+  pubmsg.payloadlen = strlen(pubmsg.payload);
+  pubmsg.qos = 1;
+  pubmsg.retained = 1;
+  client = MQTTClient_publish(conn, groupTopic, pubmsg.payloadlen, pubmsg.payload, pubmsg.qos, pubmsg.retained, &dt);
+  
+  if (client != MQTTCLIENT_SUCCESS) return 0;
+
+
+  return 1;
 }
