@@ -13,6 +13,7 @@ Trabalho: SIMULAÇÃO DE UM CHAT UM PRA UM E CHAT EM GRUPO*/
 #include "MQTTAsync.h"
 #include <json-c/json.h>
 #include <pthread.h>
+#include <unistd.h>
 
 #define ADDRESS     "tcp://3.80.198.178:1890"
 #define CLIENTID    "ExampleClientSub"
@@ -20,7 +21,8 @@ Trabalho: SIMULAÇÃO DE UM CHAT UM PRA UM E CHAT EM GRUPO*/
 #define PAYLOAD     "Hello World!"
 #define QOS         1
 #define TIMEOUT     10000L
-#define DEBUG       1
+#define DEBUG       0
+#define INFO        0
 
 //User initialization.
 int initializeUser(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_willOptions wopts, char* userID);
@@ -43,7 +45,7 @@ int geth(){                                        //PRESSIONE PARA CONTINUAR (P
 
 int list_menu(){
     int menu;
-    //system("clear");
+    // system("clear");
     printf("MENU DO CHAT: \n\n");
     printf("1) LISTAR USUÁRIOS ONLINE \n");
     printf("2) CRIAÇÃO DE GRUPO \n");
@@ -59,6 +61,7 @@ int list_menu(){
 }
 
 int initializeUser(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_willOptions wopts, char* userID){
+  printf("Intializing user...\n");
 	int client;
   char userControlTopic[50];
 
@@ -95,11 +98,13 @@ int initializeUser(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_w
     pubmsg.retained = 0;
     client = MQTTClient_publish(conn, userControlTopic, pubmsg.payloadlen, pubmsg.payload, pubmsg.qos, pubmsg.retained, &dt);
   }
+  MQTTClient_disconnect(conn, 10000);
 	
   return 1;
 }
 
 int setUserOnline(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_willOptions wopts, char* userID){
+  printf("Setting user online...\n");
   int client;
   char userTopic[100];
   char payload[100];
@@ -119,11 +124,18 @@ int setUserOnline(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_wi
   pubmsg.retained = 1;
 
   client = MQTTClient_connect(conn, &opts);
-	if (client != MQTTCLIENT_SUCCESS) return 0;
+	if (client != MQTTCLIENT_SUCCESS){
+    printf("Falha na conexão!\n");
+    return 0;
+  }
+  
 
   client = MQTTClient_publish(conn, userTopic, pubmsg.payloadlen, pubmsg.payload, pubmsg.qos, pubmsg.retained, &dt);
-  if (client != MQTTCLIENT_SUCCESS) return 0;
-
+  if (client != MQTTCLIENT_SUCCESS){
+    printf("Falha na publicação!\n");
+    return 0;
+  } 
+  MQTTClient_disconnect(conn, 10000);
   return 1;
 }
 
@@ -159,7 +171,7 @@ int listUsersStatus(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_
   MQTTClient_connectOptions conn_opts = MQTTClient_connectOptions_initializer;
   int rc;
   int ch;
-  MQTTClient_create(&client, ADDRESS, CLIENTID,
+  MQTTClient_create(&client, ADDRESS, userID,
       MQTTCLIENT_PERSISTENCE_NONE, NULL);
   conn_opts.keepAliveInterval = 20;
   conn_opts.cleansession = 1;
@@ -173,10 +185,13 @@ int listUsersStatus(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_
   //userTopic subscription.
 	MQTTClient_subscribe(client, "USERS/#", 0);
   // if (client != MQTTCLIENT_SUCCESS) return 0;
-
+  printf("Pressione Q<Enter> para sair...\n");
   do{
     ch = getchar();
   } while(ch!='Q' && ch != 'q');
+
+  MQTTClient_disconnect(client, 10000);
+  MQTTClient_destroy(&client);
 
   return 1;
 }
@@ -216,13 +231,46 @@ int create_group(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_wil
   pubmsg.payloadlen = strlen(pubmsg.payload);
   pubmsg.qos = 1;
   pubmsg.retained = 1;
+  client = MQTTClient_connect(conn, &opts);
+	if (client != MQTTCLIENT_SUCCESS) return 0;
   client = MQTTClient_publish(conn, groupTopic, pubmsg.payloadlen, pubmsg.payload, pubmsg.qos, pubmsg.retained, &dt);
   
   if (client != MQTTCLIENT_SUCCESS) return 0;
 
-
+  MQTTClient_disconnect(conn, 10000);
   return 1;
 }
+
+// // THREAD ->>> CONTROL MESSAGES
+// void* listen_control(void* control_topic){
+//   char* topic = (char *)control_topic;
+//   char id[50];
+//   sprintf(id, "listen_control_id_%s", topic);
+
+//   if(DEBUG){
+//     printf("Iniciando a Thread de controle do tópico %s", topic);
+//   }
+  
+//   MQTTClient client;
+//   MQTTClient_connectOptions conn_opts = MQTTClient_connectOptions_initializer;
+//   int rc;
+//   MQTTClient_create(&client, ADDRESS, id, MQTTCLIENT_PERSISTENCE_NONE, NULL);
+//   conn_opts.keepAliveInterval = 20;
+//   conn_opts.cleansession = 1;
+//   MQTTClient_setCallbacks(client, NULL, NULL, msgarrvd, NULL);
+//   if ((rc = MQTTClient_connect(client, &conn_opts)) != MQTTCLIENT_SUCCESS){
+//       printf("Failed to connect, return code %d\n", rc);
+//       exit(EXIT_FAILURE);
+//   }
+//   printf("\nSubscribing to topic %s\nfor client %s using QoS%d\n\n""Press Q<Enter> to quit\n\n", topic, id, QOS);
+//   MQTTClient_subscribe(client, topic, QOS);
+//   while(1){
+
+//   }
+//   MQTTClient_disconnect(client, 10000);
+//   MQTTClient_destroy(&client);
+//   exit(EXIT_SUCCESS);
+// }
 
 
 ////////////////////////// MAIN //////////////////////////////
@@ -241,6 +289,12 @@ int main(int argc, char *argv[]) {
     exit(EXIT_FAILURE);
   }
 
+  // pthread_t listen_ctrl;
+
+  // pthread_create(&listen_ctrl, NULL, listen_control, "test_topic2");
+
+  // sleep(1);
+
   //User inicialization.
   if(initializeUser(conn, opts, wopts, userID) && setUserOnline(conn, opts, wopts, userID)){
 
@@ -248,6 +302,7 @@ int main(int argc, char *argv[]) {
       printf("\n\n\nMENU VALUE: %d\n", menu);
       switch (menu) {
         case 1:
+          system("clear");
           if(!listUsersStatus(conn, opts, wopts, userID)){
             printf("An error has occured while listing users status!");
             menu = 0;
