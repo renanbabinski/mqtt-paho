@@ -36,6 +36,8 @@ int listUsersStatus(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_
 int msgarrvd(void *context, char *topicName, int topicLen, MQTTClient_message *message);
 //Group creation
 int create_group(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_willOptions wopts, char* userID);
+//List Each User and Status
+int forEachUser(void *context, char *topicName, int topicLen, MQTTClient_message *message);
 
 int geth(){                                        //PRESSIONE PARA CONTINUAR (PAUSE)
 	char s;
@@ -175,7 +177,7 @@ int listUsersStatus(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_
       MQTTCLIENT_PERSISTENCE_NONE, NULL);
   conn_opts.keepAliveInterval = 20;
   conn_opts.cleansession = 1;
-  MQTTClient_setCallbacks(client, NULL, NULL, msgarrvd, NULL);
+  MQTTClient_setCallbacks(client, NULL, NULL, forEachUser, NULL);
   if ((rc = MQTTClient_connect(client, &conn_opts)) != MQTTCLIENT_SUCCESS)
   {
       printf("Failed to connect, return code %d\n", rc);
@@ -185,14 +187,27 @@ int listUsersStatus(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_
   //userTopic subscription.
 	MQTTClient_subscribe(client, "USERS/#", 0);
   // if (client != MQTTCLIENT_SUCCESS) return 0;
-  printf("Pressione Q<Enter> para sair...\n");
+  printf("Pressione ENTER para sair...\n\n");
   do{
     ch = getchar();
-  } while(ch!='Q' && ch != 'q');
+  } while(ch!='\n');
 
   MQTTClient_disconnect(client, 10000);
   MQTTClient_destroy(&client);
 
+  return 1;
+}
+
+int forEachUser(void *context, char *topicName, int topicLen, MQTTClient_message *message){
+  json_object *root = json_tokener_parse((char *)message->payload);
+  json_object *user = json_object_object_get(root, "USER");
+  json_object *status = json_object_object_get(root, "STATUS");
+
+  printf("USUÁRIO: %s    STATUS: %s", json_object_get_string(user), json_object_get_string(status));
+  
+  putchar('\n');
+  MQTTClient_freeMessage(&message);
+  MQTTClient_free(topicName);
   return 1;
 }
 
