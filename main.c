@@ -31,7 +31,7 @@ int setUserOnline(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_wi
 //User offline status publication
 int setUserOffline(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_willOptions wopts, char* userID);
 //List users ONLINE/OFFLINE
-int listUsersStatus(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_willOptions wopts, char* userID);
+int listUsersStatus(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_willOptions wopts, char* userID, int onlyOnline);
 //Message arrived function
 int msgarrvd(void *context, char *topicName, int topicLen, MQTTClient_message *message);
 //Group creation
@@ -168,7 +168,7 @@ int setUserOffline(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_w
   return 1;
 }
 
-int listUsersStatus(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_willOptions wopts, char* userID){
+int listUsersStatus(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_willOptions wopts, char* userID, int onlyOnline){
   MQTTClient client;
   MQTTClient_connectOptions conn_opts = MQTTClient_connectOptions_initializer;
   int rc;
@@ -177,7 +177,7 @@ int listUsersStatus(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_
       MQTTCLIENT_PERSISTENCE_NONE, NULL);
   conn_opts.keepAliveInterval = 20;
   conn_opts.cleansession = 1;
-  MQTTClient_setCallbacks(client, NULL, NULL, forEachUser, NULL);
+  MQTTClient_setCallbacks(client, &onlyOnline, NULL, forEachUser, NULL);
   if ((rc = MQTTClient_connect(client, &conn_opts)) != MQTTCLIENT_SUCCESS)
   {
       printf("Failed to connect, return code %d\n", rc);
@@ -199,6 +199,7 @@ int listUsersStatus(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_
 }
 
 int forEachUser(void *context, char *topicName, int topicLen, MQTTClient_message *message){
+  printf("ONLINE ONLY MODE: %d\n", *(int *)context);
   json_object *root = json_tokener_parse((char *)message->payload);
   json_object *user = json_object_object_get(root, "USER");
   json_object *status = json_object_object_get(root, "STATUS");
@@ -255,6 +256,39 @@ int create_group(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_wil
   MQTTClient_disconnect(conn, 10000);
   return 1;
 }
+
+int request_chat(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_willOptions wopts, char* userID){
+  // int client;
+
+  printf("Selecione um usuário online com o qual deseja conversar:\n");
+
+
+
+  // char* groupTopic = "GROUPS";
+  // char payload[100];
+
+  // MQTTClient_message pubmsg = MQTTClient_message_initializer;
+  // MQTTClient_deliveryToken dt;
+  // sprintf(payload, "{\"GROUP_NAME\" : \"%s\", \"OWNER\" : \"%s\", \"CREATED_TIME\" : \"2022-03-15\", \"N_MEMBERS\" : 1}", group_name, userID);
+  // if(DEBUG){
+  //   json_object *root = json_tokener_parse(payload);
+  //   printf("The json string: \n\n%s\n\n", json_object_to_json_string(root));
+  //   printf("The json object to string:\n\n%s\n", json_object_to_json_string_ext(root, JSON_C_TO_STRING_PRETTY));
+  // }
+  // pubmsg.payload = payload;
+  // pubmsg.payloadlen = strlen(pubmsg.payload);
+  // pubmsg.qos = 1;
+  // pubmsg.retained = 1;
+  // client = MQTTClient_connect(conn, &opts);
+	// if (client != MQTTCLIENT_SUCCESS) return 0;
+  // client = MQTTClient_publish(conn, groupTopic, pubmsg.payloadlen, pubmsg.payload, pubmsg.qos, pubmsg.retained, &dt);
+  
+  // if (client != MQTTCLIENT_SUCCESS) return 0;
+
+  // MQTTClient_disconnect(conn, 10000);
+  return 1;
+}
+
 
 // // THREAD ->>> CONTROL MESSAGES
 // void* listen_control(void* control_topic){
@@ -318,7 +352,7 @@ int main(int argc, char *argv[]) {
       switch (menu) {
         case 1:
           system("clear");
-          if(!listUsersStatus(conn, opts, wopts, userID)){
+          if(!listUsersStatus(conn, opts, wopts, userID, 0)){
             printf("An error has occured while listing users status!");
             menu = 0;
           }
@@ -340,7 +374,10 @@ int main(int argc, char *argv[]) {
           break;
 
         case 4:
-          printf("\nOPÇÃO 4!\n");
+          if(!request_chat(conn, opts, wopts, userID)){
+            printf("An error has occured while requesting chat!");
+            menu = 0;
+          }
           geth();
           break;
 
