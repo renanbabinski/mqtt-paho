@@ -301,7 +301,7 @@ void createPayload(char* payload, int payloadSize, char* action, char* topic, ch
   time_t timeStamp;
   time(&timeStamp);
 
-  char json[payloadSize];
+  char json[payloadSize + 100];
 
   sprintf(json, "{\"ACTION\" : \"%s\", \"TOPIC\" : \"%s\", \"TIMESTAMP\" : \"%ld\", \"SOURCE\" : \"%s\", \"PAYLOAD\" : \"%s\" }", action, topic, timeStamp, source, message);
 
