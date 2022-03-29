@@ -22,8 +22,8 @@ Trabalho: SIMULAÇÃO DE UM CHAT UM PRA UM E CHAT EM GRUPO*/
 #define TIMEOUT     10000L
 #define DEBUG       1
 
-//Payload creation
-const char* createPayload(char *action, char *topic, char *source, void *payload);
+//Payload creation.
+void createPayload(char* payload, int payloadSize, char* action, char* topic, char* source, char* message);
 //User initialization.
 int initializeUser(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_willOptions wopts, char* userID);
 //User online status publication.
@@ -297,13 +297,13 @@ int create_group(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_wil
 }
 
 
-const char* createPayload(char* action, char* topic, char* source, void* payload){
+void createPayload(char* payload, int payloadSize, char* action, char* topic, char* source, char* message){
   time_t timeStamp;
   time(&timeStamp);
 
-  char* json[500];
+  char json[payloadSize];
 
-  sprintf(json, "{\"ACTION\" : \"%s\", \"TOPIC\" : \"%s\", \"TIMESTAMP\" : \"%d\", \"SOURCE\" : \"%s\", \"PAYLOAD\" : \"%s\" }", action, topic, timeStamp, source, (char*) payload);
+  sprintf(json, "{\"ACTION\" : \"%s\", \"TOPIC\" : \"%s\", \"TIMESTAMP\" : \"%ld\", \"SOURCE\" : \"%s\", \"PAYLOAD\" : \"%s\" }", action, topic, timeStamp, source, message);
 
   if(DEBUG){
     json_object *root = json_tokener_parse(json);
@@ -311,5 +311,5 @@ const char* createPayload(char* action, char* topic, char* source, void* payload
     printf("The json object to string:\n\n%s\n", json_object_to_json_string_ext(root, JSON_C_TO_STRING_PRETTY));
   }
 
-  return json;
+  memcpy(payload, json, strlen(json)+1);
 }
