@@ -1,4 +1,4 @@
-//gcc main.c -o mqtt_exemplo -lpaho-mqtt3c -ljson-c -Wall
+//gcc main.c -o mqtt_exemplo -lpaho-mqtt3c -ljson-c -lpthread -Wall
 /*Trabalho de TÓPICOS XIII CHAT MQTT PAHO
 
 Universidade Federal da Fronteira Sul - UFFS - Campus Chapecó-SC
@@ -12,6 +12,8 @@ Trabalho: SIMULAÇÃO DE UM CHAT UM PRA UM E CHAT EM GRUPO*/
 #include "MQTTClient.h"
 #include "MQTTAsync.h"
 #include <json-c/json.h>
+#include <pthread.h>
+#include <unistd.h>
 #include <time.h>
 
 #define ADDRESS     "tcp://3.80.198.178:1890"
@@ -21,6 +23,7 @@ Trabalho: SIMULAÇÃO DE UM CHAT UM PRA UM E CHAT EM GRUPO*/
 #define QOS         1
 #define TIMEOUT     10000L
 #define DEBUG       1
+#define INFO        0
 
 //Payload creation.
 void createPayload(char* payload, int payloadSize, char* action, char* topic, char* source, char* message);
@@ -31,11 +34,13 @@ int setUserOnline(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_wi
 //User offline status publication
 int setUserOffline(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_willOptions wopts, char* userID);
 //List users ONLINE/OFFLINE
-int listUsersStatus(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_willOptions wopts, char* userID);
+int listUsersStatus(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_willOptions wopts, char* userID, int onlyOnline);
 //Message arrived function
 int msgarrvd(void *context, char *topicName, int topicLen, MQTTClient_message *message);
 //Group creation
 int create_group(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_willOptions wopts, char* userID);
+//List Each User and Status
+int forEachUser(void *context, char *topicName, int topicLen, MQTTClient_message *message);
 
 
 int geth(){                                        //PRESSIONE PARA CONTINUAR (PAUSE)
@@ -46,7 +51,7 @@ int geth(){                                        //PRESSIONE PARA CONTINUAR (P
 
 int list_menu(){
     int menu;
-    //system("clear");
+    // system("clear");
     printf("MENU DO CHAT: \n\n");
     printf("1) LISTAR USUÁRIOS ONLINE \n");
     printf("2) CRIAÇÃO DE GRUPO \n");
@@ -61,81 +66,8 @@ int list_menu(){
     return menu;
 }
 
-int main(int argc, char *argv[]) {
-	MQTTClient conn;
-	MQTTClient_connectOptions opts = MQTTClient_connectOptions_initializer;
-	MQTTClient_willOptions wopts = MQTTClient_willOptions_initializer;
-  
-  int menu;
-  char* userID = argv[1];
-
-  //Initialize broker connection.
-  if (MQTTClient_create(&conn, ADDRESS, userID, MQTTCLIENT_PERSISTENCE_NONE, NULL) != MQTTCLIENT_SUCCESS){
-    printf("An error has occured while initializing Client!");
-    exit(EXIT_FAILURE);
-  }
-
-  //User inicialization.
-  if(initializeUser(conn, opts, wopts, userID) && setUserOnline(conn, opts, wopts, userID)){
-
-    while((menu = list_menu())!= 0){
-      printf("\n\n\nMENU VALUE: %d\n", menu);
-      switch (menu) {
-        case 1:
-          if(!listUsersStatus(conn, opts, wopts, userID)){
-            printf("An error has occured while listing users status!");
-            menu = 0;
-          }
-
-          break;
-
-        case 2:
-          if(!create_group(conn, opts, wopts, userID)){
-            printf("An error has occured while creating group!");
-            menu = 0;
-          }
-          geth();
-
-          break;
-
-        case 3:
-          printf("\nOPÇÃO 3!\n");
-          geth();
-          break;
-
-        case 4:
-          printf("\nOPÇÃO 4!\n");
-          geth();
-          break;
-
-        case 5:
-          printf("\nOPÇÃO 5!\n");
-          geth();
-          break;
-
-        case 0:
-
-          
-          break;
-
-        default:
-          printf("Opção Inválida\n");
-          geth();
-          break;
-
-      }
-    }
-    if(!setUserOffline(conn, opts, wopts, userID)){
-      printf("An error has occured while setting user offline!");
-    }
-  } else {
-    printf("An error has occured while initializing User!");
-  }
-
-  return 0;
-}
-
 int initializeUser(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_willOptions wopts, char* userID){
+  printf("Intializing user...\n");
 	int client;
   char userControlTopic[50];
 
@@ -172,11 +104,13 @@ int initializeUser(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_w
     pubmsg.retained = 0;
     client = MQTTClient_publish(conn, userControlTopic, pubmsg.payloadlen, pubmsg.payload, pubmsg.qos, pubmsg.retained, &dt);
   }
+  MQTTClient_disconnect(conn, 10000);
 	
   return 1;
 }
 
 int setUserOnline(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_willOptions wopts, char* userID){
+  printf("Setting user online...\n");
   int client;
   char userTopic[100];
   char payload[100];
@@ -194,10 +128,20 @@ int setUserOnline(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_wi
   pubmsg.payloadlen = strlen(pubmsg.payload);
   pubmsg.qos = 1;
   pubmsg.retained = 1;
-  client = MQTTClient_publish(conn, userTopic, pubmsg.payloadlen, pubmsg.payload, pubmsg.qos, pubmsg.retained, &dt);
-  
-  if (client != MQTTCLIENT_SUCCESS) return 0;
 
+  client = MQTTClient_connect(conn, &opts);
+	if (client != MQTTCLIENT_SUCCESS){
+    printf("Falha na conexão!\n");
+    return 0;
+  }
+  
+
+  client = MQTTClient_publish(conn, userTopic, pubmsg.payloadlen, pubmsg.payload, pubmsg.qos, pubmsg.retained, &dt);
+  if (client != MQTTCLIENT_SUCCESS){
+    printf("Falha na publicação!\n");
+    return 0;
+  } 
+  MQTTClient_disconnect(conn, 10000);
   return 1;
 }
 
@@ -219,6 +163,8 @@ int setUserOffline(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_w
   pubmsg.payloadlen = strlen(pubmsg.payload);
   pubmsg.qos = 1;
   pubmsg.retained = 1;
+  client = MQTTClient_connect(conn, &opts);
+	if (client != MQTTCLIENT_SUCCESS) return 0;
   client = MQTTClient_publish(conn, userTopic, pubmsg.payloadlen, pubmsg.payload, pubmsg.qos, pubmsg.retained, &dt);
   
   if (client != MQTTCLIENT_SUCCESS) return 0;
@@ -226,16 +172,16 @@ int setUserOffline(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_w
   return 1;
 }
 
-int listUsersStatus(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_willOptions wopts, char* userID){
+int listUsersStatus(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_willOptions wopts, char* userID, int onlyOnline){
   MQTTClient client;
   MQTTClient_connectOptions conn_opts = MQTTClient_connectOptions_initializer;
   int rc;
   int ch;
-  MQTTClient_create(&client, ADDRESS, CLIENTID,
+  MQTTClient_create(&client, ADDRESS, userID,
       MQTTCLIENT_PERSISTENCE_NONE, NULL);
   conn_opts.keepAliveInterval = 20;
   conn_opts.cleansession = 1;
-  MQTTClient_setCallbacks(client, NULL, NULL, msgarrvd, NULL);
+  MQTTClient_setCallbacks(client, &onlyOnline, NULL, forEachUser, NULL);
   if ((rc = MQTTClient_connect(client, &conn_opts)) != MQTTCLIENT_SUCCESS)
   {
       printf("Failed to connect, return code %d\n", rc);
@@ -245,11 +191,28 @@ int listUsersStatus(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_
   //userTopic subscription.
 	MQTTClient_subscribe(client, "USERS/#", 0);
   // if (client != MQTTCLIENT_SUCCESS) return 0;
-
+  printf("Pressione ENTER para sair...\n\n");
   do{
     ch = getchar();
-  } while(ch!='Q' && ch != 'q');
+  } while(ch!='\n');
 
+  MQTTClient_disconnect(client, 10000);
+  MQTTClient_destroy(&client);
+
+  return 1;
+}
+
+int forEachUser(void *context, char *topicName, int topicLen, MQTTClient_message *message){
+  printf("ONLINE ONLY MODE: %d\n", *(int *)context);
+  json_object *root = json_tokener_parse((char *)message->payload);
+  json_object *user = json_object_object_get(root, "USER");
+  json_object *status = json_object_object_get(root, "STATUS");
+
+  printf("USUÁRIO: %s    STATUS: %s", json_object_get_string(user), json_object_get_string(status));
+  
+  putchar('\n');
+  MQTTClient_freeMessage(&message);
+  MQTTClient_free(topicName);
   return 1;
 }
 
@@ -288,14 +251,133 @@ int create_group(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_wil
   pubmsg.payloadlen = strlen(pubmsg.payload);
   pubmsg.qos = 1;
   pubmsg.retained = 1;
+  client = MQTTClient_connect(conn, &opts);
+	if (client != MQTTCLIENT_SUCCESS) return 0;
   client = MQTTClient_publish(conn, groupTopic, pubmsg.payloadlen, pubmsg.payload, pubmsg.qos, pubmsg.retained, &dt);
   
   if (client != MQTTCLIENT_SUCCESS) return 0;
 
-
+  MQTTClient_disconnect(conn, 10000);
   return 1;
 }
 
+int request_chat(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_willOptions wopts, char* userID){
+  // int client;
+
+  printf("Selecione um usuário online com o qual deseja conversar:\n");
+
+
+
+  // char* groupTopic = "GROUPS";
+  // char payload[100];
+
+  // MQTTClient_message pubmsg = MQTTClient_message_initializer;
+  // MQTTClient_deliveryToken dt;
+  // sprintf(payload, "{\"GROUP_NAME\" : \"%s\", \"OWNER\" : \"%s\", \"CREATED_TIME\" : \"2022-03-15\", \"N_MEMBERS\" : 1}", group_name, userID);
+  // if(DEBUG){
+  //   json_object *root = json_tokener_parse(payload);
+  //   printf("The json string: \n\n%s\n\n", json_object_to_json_string(root));
+  //   printf("The json object to string:\n\n%s\n", json_object_to_json_string_ext(root, JSON_C_TO_STRING_PRETTY));
+  // }
+  // pubmsg.payload = payload;
+  // pubmsg.payloadlen = strlen(pubmsg.payload);
+  // pubmsg.qos = 1;
+  // pubmsg.retained = 1;
+  // client = MQTTClient_connect(conn, &opts);
+	// if (client != MQTTCLIENT_SUCCESS) return 0;
+  // client = MQTTClient_publish(conn, groupTopic, pubmsg.payloadlen, pubmsg.payload, pubmsg.qos, pubmsg.retained, &dt);
+  
+  // if (client != MQTTCLIENT_SUCCESS) return 0;
+
+  // MQTTClient_disconnect(conn, 10000);
+  return 1;
+}
+
+////////////////////////// MAIN //////////////////////////////
+
+int main(int argc, char *argv[]) {
+	MQTTClient conn;
+	MQTTClient_connectOptions opts = MQTTClient_connectOptions_initializer;
+	MQTTClient_willOptions wopts = MQTTClient_willOptions_initializer;
+  
+  int menu;
+  char* userID = argv[1];
+
+  //Initialize broker connection.
+  if (MQTTClient_create(&conn, ADDRESS, userID, MQTTCLIENT_PERSISTENCE_NONE, NULL) != MQTTCLIENT_SUCCESS){
+    printf("An error has occured while initializing Client!");
+    exit(EXIT_FAILURE);
+  }
+
+  // pthread_t listen_ctrl;
+
+  // pthread_create(&listen_ctrl, NULL, listen_control, "test_topic2");
+
+  // sleep(1);
+
+  //User inicialization.
+  if(initializeUser(conn, opts, wopts, userID) && setUserOnline(conn, opts, wopts, userID)){
+
+    while((menu = list_menu())!= 0){
+      printf("\n\n\nMENU VALUE: %d\n", menu);
+      switch (menu) {
+        case 1:
+          system("clear");
+          if(!listUsersStatus(conn, opts, wopts, userID, 0)){
+            printf("An error has occured while listing users status!");
+            menu = 0;
+          }
+
+          break;
+
+        case 2:
+          if(!create_group(conn, opts, wopts, userID)){
+            printf("An error has occured while creating group!");
+            menu = 0;
+          }
+          geth();
+
+          break;
+
+        case 3:
+          printf("\nOPÇÃO 3!\n");
+          geth();
+          break;
+
+        case 4:
+          if(!request_chat(conn, opts, wopts, userID)){
+            printf("An error has occured while requesting chat!");
+            menu = 0;
+          }
+          geth();
+          break;
+
+        case 5:
+          printf("\nOPÇÃO 5!\n");
+          geth();
+          break;
+
+        case 0:
+
+          
+          break;
+
+        default:
+          printf("Opção Inválida\n");
+          geth();
+          break;
+
+      }
+    }
+    if(!setUserOffline(conn, opts, wopts, userID)){
+      printf("An error has occured while setting user offline!");
+    }
+  } else {
+    printf("An error has occured while initializing User!");
+  }
+
+  return 0;
+}
 
 void createPayload(char* payload, int payloadSize, char* action, char* topic, char* source, char* message){
   time_t timeStamp;
