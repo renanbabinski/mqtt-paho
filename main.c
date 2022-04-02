@@ -367,8 +367,11 @@ void createPayload(char* payload, int payloadSize, char* action, char* topic, ch
 
 // THREAD ->>> CONTROL MESSAGES
 void* listen_control(void* userID){
-  char* topic = (char *)userID;
-  char id[50];
+  char topic[50];
+  strcpy(topic, userID);
+  strcat(topic,"_Control");
+
+  char id[100];
 
   strcat(topic,"_Control");
 
