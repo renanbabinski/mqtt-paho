@@ -27,7 +27,7 @@ Trabalho: SIMULAÇÃO DE UM CHAT UM PRA UM E CHAT EM GRUPO
 #define PAYLOAD     "Hello World!"
 #define QOS         1
 #define TIMEOUT     10000L
-#define DEBUG       0
+#define DEBUG       1
 #define INFO        0
 
 listHead *chatReqList;
@@ -65,7 +65,9 @@ int geth(){                                        //PRESSIONE PARA CONTINUAR (P
 
 int list_menu(){
   int menu;
-  // system("clear");
+  if(!DEBUG){
+    system("clear");
+  }
   printf("MENU DO CHAT: \n\n");
   printf("1) LISTAR USUÁRIOS ONLINE \n");
   printf("2) CRIAÇÃO DE GRUPO \n");
@@ -374,7 +376,7 @@ void* listen_control(void* userID){
 
   if(DEBUG){
 		pthread_mutex_lock(&printf_mutex);
-    printf("Iniciando a Thread de controle do tópico %s", topic);
+    printf("Iniciando a Thread de controle do tópico %s\n", topic);
 		pthread_mutex_unlock(&printf_mutex);
   }
 
@@ -473,12 +475,12 @@ int main(int argc, char *argv[]) {
           break;
 
         case 98:
-          printf("\nOPÇÃO 7!\n");
+          // printf("\nOPÇÃO 7!\n");
           testSend(conn, opts, wopts, userID);
           break;
 
         case 99:
-          printf("\nOPÇÃO 8!\n");
+          // printf("\nOPÇÃO 8!\n");
           removeReq(chatReqList, 1);
           break;
 
