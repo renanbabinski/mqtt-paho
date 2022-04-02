@@ -72,8 +72,8 @@ int list_menu(){
   printf("3) VER GRUPOS CADASTRADOS\n");
   printf("4) INICIAR CONVERSA PRIVADA\n");
   printf("5) INICIAR CONVERSA EM GRUPO\n");
+  printf("6) MOSTRAR REQUISIÇÕES DE CHAT\n");
   if (DEBUG){
-    printf("97) MOSTRAR REQUISIÇÕES DE CHAT\n");
     printf("98) TESTE ENVIAR REQUISIÇÃO\n");
     printf("99) REMOVER REQUISIÇÃO\n");
   }
@@ -465,9 +465,11 @@ int main(int argc, char *argv[]) {
           geth();
           break;
 
-        case 97:
-          printf("\nOPÇÃO 6!\n");
+        case 6:
+	        printf("\n\n|----------LIST OF REQUESTED CHATS----------|");
           printReqs(chatReqList);
+	        printf("\n\n|-------------------------------------------|");
+	        printf("\n\n");
           break;
 
         case 98:

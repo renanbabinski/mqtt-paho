@@ -83,16 +83,12 @@ void insertReq(listHead *head, request *node){
 int printReqs(listHead *head){
 	int i = 1;
 	list *aux;
-	
-	printf("\n\n|------------------------------------------|");
-	
+		
 	for(aux = head->first; aux != NULL; aux = aux->next, i++){
 		printf("\nNo: %d", i);
 		printf("\n Source : %s", aux->data->source);
 		printf("\n Time Requested: %s", aux->data->timeStamp);
 	}
-	
-	printf("\n|------------------------------------------|\n\n");
   
 	return i;
 }
