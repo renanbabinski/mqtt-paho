@@ -210,7 +210,10 @@ int listUsersStatus(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_
   }
 
   //userTopic subscription.
-  printf("Pressione ENTER para sair...\n\n");
+  if(!onlyOnline){
+    printf("Pressione ENTER para sair...\n\n");
+  }
+
 	MQTTClient_subscribe(client, "USERS/#", 0);
   // if (client != MQTTCLIENT_SUCCESS) return 0;
   do{
@@ -224,12 +227,18 @@ int listUsersStatus(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_
 }
 
 int forEachUser(void *context, char *topicName, int topicLen, MQTTClient_message *message){
-  printf("ONLINE ONLY MODE: %d\n", *(int *)context);
+  int online_mode = *(int *)context;
   json_object *root = json_tokener_parse((char *)message->payload);
   json_object *user = json_object_object_get(root, "USER");
   json_object *status = json_object_object_get(root, "STATUS");
 
-  printf("USUÁRIO: %s    STATUS: %s", json_object_get_string(user), json_object_get_string(status));
+  if(online_mode){
+    if(!strcmp(json_object_get_string(status), "ONLINE")){
+      printf("USUÁRIO: %s    STATUS: %s", json_object_get_string(user), json_object_get_string(status));
+    }
+  }else{
+    printf("USUÁRIO: %s    STATUS: %s", json_object_get_string(user), json_object_get_string(status));
+  }
   
   putchar('\n');
   MQTTClient_freeMessage(&message);
@@ -318,6 +327,13 @@ int request_chat(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_wil
   // int client;
 
   printf("Selecione um usuário online com o qual deseja conversar:\n");
+
+  if(!listUsersStatus(conn, opts, wopts, userID, 1)){
+    printf("An error has occured while listing users status");
+    exit(EXIT_FAILURE);
+  }
+  
+
 
 
 
@@ -466,6 +482,7 @@ int main(int argc, char *argv[]) {
           break;
 
         case 4:
+          system("clear");
           if(!request_chat(conn, opts, wopts, userID)){
             printf("An error has occured while requesting chat!");
             menu = 0;
