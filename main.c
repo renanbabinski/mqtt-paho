@@ -5,16 +5,21 @@ Universidade Federal da Fronteira Sul - UFFS - Campus Chapecó-SC
 Estudante: Darlan Adriano Schmitz, Renan Luiz Babinski, Rodolfo Trevisol
 Disciplina: Redes de Tópicos XIII
 Professor: MARCO AURÉLIO SPOHN
-Trabalho: SIMULAÇÃO DE UM CHAT UM PRA UM E CHAT EM GRUPO*/
+Trabalho: SIMULAÇÃO DE UM CHAT UM PRA UM E CHAT EM GRUPO
+*/
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include "MQTTClient.h"
 #include "MQTTAsync.h"
+#include <MQTTClientPersistence.h>
 #include <json-c/json.h>
 #include <pthread.h>
 #include <unistd.h>
 #include <time.h>
+#include "lista.h"
+
 
 #define ADDRESS     "tcp://3.80.198.178:1890"
 #define CLIENTID    "ExampleClientSub"
@@ -22,8 +27,14 @@ Trabalho: SIMULAÇÃO DE UM CHAT UM PRA UM E CHAT EM GRUPO*/
 #define PAYLOAD     "Hello World!"
 #define QOS         1
 #define TIMEOUT     10000L
-#define DEBUG       1
+#define DEBUG       0
 #define INFO        0
+
+listHead *chatReqList;
+pthread_mutex_t lock_mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t printf_mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_t listen_ctrl;
+
 
 //Payload creation.
 void createPayload(char* payload, int payloadSize, char* action, char* topic, char* source, char* message);
@@ -41,7 +52,10 @@ int msgarrvd(void *context, char *topicName, int topicLen, MQTTClient_message *m
 int create_group(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_willOptions wopts, char* userID);
 //List Each User and Status
 int forEachUser(void *context, char *topicName, int topicLen, MQTTClient_message *message);
-
+//Thread user control.
+void* listen_control(void* userID);
+//Test send function.
+int testSend(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_willOptions wopts, char* userID);
 
 int geth(){                                        //PRESSIONE PARA CONTINUAR (PAUSE)
 	char s;
@@ -50,20 +64,25 @@ int geth(){                                        //PRESSIONE PARA CONTINUAR (P
 }
 
 int list_menu(){
-    int menu;
-    // system("clear");
-    printf("MENU DO CHAT: \n\n");
-    printf("1) LISTAR USUÁRIOS ONLINE \n");
-    printf("2) CRIAÇÃO DE GRUPO \n");
-    printf("3) VER GRUPOS CADASTRADOS\n");
-    printf("4) INICIAR CONVERSA PRIVADA\n");
-    printf("5) INICIAR CONVERSA EM GRUPO\n");
-    printf("0) SAIR DO PROGRAMA\n");
-    printf("\n\n");
-    scanf("%d", &menu);
-    geth();
-    setbuf(stdin, NULL);
-    return menu;
+  int menu;
+  // system("clear");
+  printf("MENU DO CHAT: \n\n");
+  printf("1) LISTAR USUÁRIOS ONLINE \n");
+  printf("2) CRIAÇÃO DE GRUPO \n");
+  printf("3) VER GRUPOS CADASTRADOS\n");
+  printf("4) INICIAR CONVERSA PRIVADA\n");
+  printf("5) INICIAR CONVERSA EM GRUPO\n");
+  printf("6) MOSTRAR REQUISIÇÕES DE CHAT\n");
+  if (DEBUG){
+    printf("98) TESTE ENVIAR REQUISIÇÃO\n");
+    printf("99) REMOVER REQUISIÇÃO\n");
+  }
+  printf("0) SAIR DO PROGRAMA\n");
+  printf("\n\n");
+  scanf("%d", &menu);
+  geth();
+  setbuf(stdin, NULL);
+  return menu;
 }
 
 int initializeUser(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_willOptions wopts, char* userID){
@@ -217,18 +236,50 @@ int forEachUser(void *context, char *topicName, int topicLen, MQTTClient_message
 }
 
 int msgarrvd(void *context, char *topicName, int topicLen, MQTTClient_message *message){
-    int i;
-    char* payloadptr;
-    printf("topic: %s\n", topicName);
-    printf("message: ");
-    payloadptr = message->payload;
-    for(i=0; i<message->payloadlen; i++)
-    {
-        putchar(*payloadptr++);
-    }
-    putchar('\n');
-    MQTTClient_freeMessage(&message);
-    MQTTClient_free(topicName);
+    json_object *root, *action, *source, *timeStamp, *payload;
+    char* payloadptr = message->payload;
+    
+    //Locks mutex to use exclusively the shared lists.
+    pthread_mutex_lock(&lock_mutex);
+    
+      root = json_tokener_parse(payloadptr);
+      action = json_object_object_get( root, "ACTION");
+      payload = json_object_object_get( root, "PAYLOAD");
+
+      if(DEBUG){
+        json_object *source = json_object_object_get( root, "SOURCE");
+        printf("\nACTION RECEIVED FROM SOURCE %s: %s\n", json_object_get_string(source), json_object_get_string(action));
+      }
+      
+      char *actionStr = (char *)json_object_get_string(action);
+      
+      //Action cases:
+      if (strcmp(actionStr,"CHATREQ") == 0){ //Chat request.
+        source = json_object_object_get( root, "SOURCE");
+        timeStamp = json_object_object_get( root, "TIMESTAMP");
+        
+        //Create a chat request.
+        request *chatReq = malloc(sizeof(request));
+        chatReq->payload = (char *)json_object_get_string(payload);
+        chatReq->source = (char *)json_object_get_string(source);
+        chatReq->timeStamp = (char *)json_object_get_string(timeStamp);
+
+        //Includes request in the list.
+        insertReq(chatReqList, chatReq);
+        
+        if(DEBUG){
+          printf("\n--------------------------------------------------");
+          printf("\npayload recebido: %s", chatReq->payload);
+          printf("\n--------------------------------------------------");
+          printReqs(chatReqList);
+        }
+      }
+
+      //MQTTClient_freeMessage(&message);
+      //MQTTClient_free(topicName);
+      
+    //Locks mutex for further use.
+    pthread_mutex_unlock(&lock_mutex);
     return 1;
 }
 
@@ -293,12 +344,69 @@ int request_chat(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_wil
   return 1;
 }
 
+
+void createPayload(char* payload, int payloadSize, char* action, char* topic, char* source, char* message){
+  time_t timeStamp;
+  time(&timeStamp);
+
+  char json[payloadSize + 100];
+
+  sprintf(json, "{\"ACTION\" : \"%s\", \"TOPIC\" : \"%s\", \"TIMESTAMP\" : \"%ld\", \"SOURCE\" : \"%s\", \"PAYLOAD\" : \"%s\" }", action, topic, timeStamp, source, message);
+
+  if(DEBUG){
+    json_object *root = json_tokener_parse(json);
+    //printf("The json string: \n\n%s\n\n", json_object_to_json_string(root));
+    printf("The json object to string:\n\n%s\n", json_object_to_json_string_ext(root, JSON_C_TO_STRING_PRETTY));
+  }
+
+  memcpy(payload, json, strlen(json)+1);
+}
+
+
+// THREAD ->>> CONTROL MESSAGES
+void* listen_control(void* userID){
+  char* topic = (char *)userID;
+  char id[50];
+
+  strcat(topic,"_Control");
+
+  sprintf(id, "listen_control_id_%s", topic);
+
+  if(DEBUG){
+		pthread_mutex_lock(&printf_mutex);
+    printf("Iniciando a Thread de controle do tópico %s", topic);
+		pthread_mutex_unlock(&printf_mutex);
+  }
+
+  MQTTClient client;
+  MQTTClient_connectOptions conn_opts = MQTTClient_connectOptions_initializer;
+  
+  MQTTClient_create(&client, ADDRESS, id, MQTTCLIENT_PERSISTENCE_NONE, NULL);
+  
+  conn_opts.keepAliveInterval = 20;
+  conn_opts.cleansession = 1;
+  MQTTClient_setCallbacks(client, NULL, NULL, msgarrvd, NULL);
+
+  int rc;
+  if ((rc = MQTTClient_connect(client, &conn_opts)) != MQTTCLIENT_SUCCESS){
+      printf("Failed to connect, return code %d\n", rc);
+      exit(EXIT_FAILURE);
+  }
+
+  MQTTClient_subscribe(client, topic, QOS);
+  return 0;
+}
+
+
+
 ////////////////////////// MAIN //////////////////////////////
 
 int main(int argc, char *argv[]) {
 	MQTTClient conn;
 	MQTTClient_connectOptions opts = MQTTClient_connectOptions_initializer;
 	MQTTClient_willOptions wopts = MQTTClient_willOptions_initializer;
+  chatReqList = malloc(sizeof(listHead));
+  chatReqList->listSize = 0;
   
   int menu;
   char* userID = argv[1];
@@ -309,14 +417,14 @@ int main(int argc, char *argv[]) {
     exit(EXIT_FAILURE);
   }
 
-  // pthread_t listen_ctrl;
-
-  // pthread_create(&listen_ctrl, NULL, listen_control, "test_topic2");
-
   // sleep(1);
 
   //User inicialization.
   if(initializeUser(conn, opts, wopts, userID) && setUserOnline(conn, opts, wopts, userID)){
+
+    pthread_create(&listen_ctrl, NULL, listen_control, userID);
+    printf("\nThread: %ld\n", listen_ctrl);
+    sleep(2);
 
     while((menu = list_menu())!= 0){
       printf("\n\n\nMENU VALUE: %d\n", menu);
@@ -357,6 +465,23 @@ int main(int argc, char *argv[]) {
           geth();
           break;
 
+        case 6:
+	        printf("\n\n|----------LIST OF REQUESTED CHATS----------|");
+          printReqs(chatReqList);
+	        printf("\n\n|-------------------------------------------|");
+	        printf("\n\n");
+          break;
+
+        case 98:
+          printf("\nOPÇÃO 7!\n");
+          testSend(conn, opts, wopts, userID);
+          break;
+
+        case 99:
+          printf("\nOPÇÃO 8!\n");
+          removeReq(chatReqList, 1);
+          break;
+
         case 0:
 
           
@@ -379,19 +504,36 @@ int main(int argc, char *argv[]) {
   return 0;
 }
 
-void createPayload(char* payload, int payloadSize, char* action, char* topic, char* source, char* message){
-  time_t timeStamp;
-  time(&timeStamp);
 
-  char json[payloadSize + 100];
 
-  sprintf(json, "{\"ACTION\" : \"%s\", \"TOPIC\" : \"%s\", \"TIMESTAMP\" : \"%ld\", \"SOURCE\" : \"%s\", \"PAYLOAD\" : \"%s\" }", action, topic, timeStamp, source, message);
 
-  if(DEBUG){
-    json_object *root = json_tokener_parse(json);
-    printf("The json string: \n\n%s\n\n", json_object_to_json_string(root));
-    printf("The json object to string:\n\n%s\n", json_object_to_json_string_ext(root, JSON_C_TO_STRING_PRETTY));
-  }
 
-  memcpy(payload, json, strlen(json)+1);
+
+
+int testSend(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_willOptions wopts, char* userID){
+  int client;
+  char *action = "CHATREQ";
+  char *topic = userID;
+  char *source = "EU TESTANDO";
+  char *message = "ISSO É UM TESTE PRA VER A LSITA";
+  int payloadSize = strlen(action) + strlen(topic) + strlen(source) + strlen(message);          
+  char *jsonRet = malloc(payloadSize);
+  
+  createPayload(jsonRet, payloadSize, action, topic, source, message);
+
+  MQTTClient_message pubmsg = MQTTClient_message_initializer;
+  MQTTClient_deliveryToken dt;
+ 
+
+  pubmsg.payload = jsonRet;
+  pubmsg.payloadlen = strlen(pubmsg.payload);
+  pubmsg.qos = 1;
+  pubmsg.retained = 1;
+  client = MQTTClient_connect(conn, &opts);
+	if (client != MQTTCLIENT_SUCCESS) return 0;
+
+  client = MQTTClient_publish(conn, topic, pubmsg.payloadlen, pubmsg.payload, pubmsg.qos, pubmsg.retained, &dt);
+  if (client != MQTTCLIENT_SUCCESS) return 0;
+
+  return 1;
 }
