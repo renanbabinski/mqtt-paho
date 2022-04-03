@@ -88,6 +88,7 @@ int printReqs(listHead *head){
 		printf("\nNo: %d", i);
 		printf("\n Source : %s", aux->data->source);
 		printf("\n Time Requested: %s", aux->data->timeStamp);
+		printf("\n Message: %s", aux->data->payload);
 	}
   
 	return i;
