@@ -243,14 +243,13 @@ int forEachUser(void *context, char *topicName, int topicLen, MQTTClient_message
     if(!strcmp(json_object_get_string(status), "ONLINE")){
       char *user_name = json_object_get_string(user);
       users[user_count] = user_name;
-      printf("%d) USUÁRIO: %s    STATUS: %s", user_count, json_object_get_string(user), json_object_get_string(status));
+      printf("%d) USUÁRIO: %s    STATUS: %s\n", user_count, json_object_get_string(user), json_object_get_string(status));
       user_count++;
     }
   }else{
-    printf("USUÁRIO: %s    STATUS: %s", json_object_get_string(user), json_object_get_string(status));
+    printf("USUÁRIO: %s    STATUS: %s\n", json_object_get_string(user), json_object_get_string(status));
   }
   
-  putchar('\n');
   MQTTClient_freeMessage(&message);
   MQTTClient_free(topicName);
   return 1;
@@ -294,6 +293,14 @@ int msgarrvd(void *context, char *topicName, int topicLen, MQTTClient_message *m
           printf("\n--------------------------------------------------");
           printReqs(chatReqList);
         }
+      }else if(strcmp(actionStr,"ACKCHAT") == 0){ //Accepted chat request
+        source = json_object_object_get( root, "SOURCE");
+        timeStamp = json_object_object_get( root, "TIMESTAMP");
+
+        printf("\n--------------------------------------------------");
+        printf("\npayload recebido: %s", json_object_get_string(payload));
+        printf("\n--------------------------------------------------\n");
+
       }
 
       //MQTTClient_freeMessage(&message);
@@ -449,17 +456,66 @@ void* listen_control(void* userID){
 }
 
 
-void accept_chat(){
+int accept_chat(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_willOptions wopts, char* userID){
   int accepted_req;
+  char *user_name;
+  time_t timeStamp;
+  time(&timeStamp);
+  char user_control_topic[50];
+  char chat_topic[50];
+  char *timestamp = malloc(50 * sizeof(char));
+  sprintf(timestamp, "%ld", timeStamp);
 
-  printf("Se deseja aceitar uma solicitação, digite o número correspondente:");
+  printf("Se deseja aceitar uma solicitação, digite o número correspondente:\nOu digite 0 para sair...\n");
   scanf("%d", &accepted_req);
-
   
 
+  if(accepted_req > 0){
 
+    user_name = popReqUserName(chatReqList, accepted_req);
 
+    printf("Você aceitou a solicitação %d e conversará com o Usuário %s\n", accepted_req, user_name);
 
+    
+    printf("Memory allocated!\n");
+
+    strcpy(user_control_topic, user_name);
+    strcat(user_control_topic,"_Control");
+
+    printf("Nome do tópico de controle: %s\n", user_control_topic);
+
+    //Defined Topic name. Format: X_Y_TIMESTAMP
+    strcpy(chat_topic, user_name);
+    strcat(chat_topic, "_");
+    strcat(chat_topic, userID);
+    strcat(chat_topic, "_");
+    strcat(chat_topic, timestamp);
+
+    printf("Nome do tópico do chat: %s\n", chat_topic);
+
+    int client;
+    char *action = "ACKCHAT";
+    char *topic = user_control_topic;
+    char *source = userID;
+    char *message = chat_topic;        
+    char *jsonRet = createPayload(action, topic, source, message);
+
+    MQTTClient_message pubmsg = MQTTClient_message_initializer;
+    MQTTClient_deliveryToken dt;
+  
+    pubmsg.payload = jsonRet;
+    pubmsg.payloadlen = strlen(pubmsg.payload);
+    pubmsg.qos = 1;
+    pubmsg.retained = 0;
+    client = MQTTClient_connect(conn, &opts);
+    if (client != MQTTCLIENT_SUCCESS) return 0;
+
+    client = MQTTClient_publish(conn, topic, pubmsg.payloadlen, pubmsg.payload, pubmsg.qos, pubmsg.retained, &dt);
+    if (client != MQTTCLIENT_SUCCESS) return 0;
+
+  }
+  geth();
+  
   return 1;
 }
 
@@ -547,8 +603,8 @@ int main(int argc, char *argv[]) {
           system("clear");
 	        printf("\n\n|----------LIST OF REQUESTED CHATS----------|");
           printReqs(chatReqList);
-	        printf("\n\n|-------------------------------------------|");
-          accept_chat();
+	        printf("\n\n|-------------------------------------------|\n");
+          accept_chat(conn, opts, wopts, userID);
 	        printf("\n\n");
           geth();
           break;

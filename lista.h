@@ -21,7 +21,8 @@ typedef struct listHead{
 
 void removeReq(listHead *head, int delete);
 void insertReq(listHead *head, request *node);
-int  printReqs(listHead *head);
+int printReqs(listHead *head);
+char* popReqUserName(listHead *head, int delete);
 
 void removeReq(listHead *head, int delete){
 	list *aux = head->first;
@@ -58,6 +59,46 @@ void removeReq(listHead *head, int delete){
 			}
 		}
   }
+}
+
+char* popReqUserName(listHead *head, int delete){
+	list *aux = head->first;
+	int i = 1;
+	char *user_name;
+	
+	if(delete > 0){
+		for(;aux != NULL && i <= delete; aux = aux->next,i++){
+			
+			if(i == delete){
+				user_name = aux->data->source;
+				//If the only node.	
+				if(aux->prev == NULL && aux->next == NULL){
+					head->first = NULL;
+					head->last = NULL;
+				
+				//If removing the first one.
+				}else if(aux->prev == NULL){
+					aux->next->prev = NULL;
+					head->first = aux->next;
+
+				//If removing the last one.
+				}else if(aux->next == NULL){
+					aux->prev->next = NULL;
+					head->last = aux->prev;
+
+				//If removing one in the middle.
+				}else{
+					aux->prev->next = aux->next;
+					aux->next->prev = aux->prev;
+				}
+
+				free(aux->data);
+				free(aux);
+				head->listSize--;
+			}
+		}
+  }
+  return user_name;
 }
 
 void insertReq(listHead *head, request *node){
