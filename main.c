@@ -36,11 +36,8 @@ pthread_mutex_t printf_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_t listen_ctrl;
 
 // GLOBALS
-int user_target_index = -1;
 int user_count = 0;
-char *user_target_name; 
 char *users[50];
-
 
 //Payload creation.
 char *createPayload(char* action, char* topic, char* source, char* message);
