@@ -449,6 +449,26 @@ void* listen_control(void* userID){
 }
 
 
+void accept_chat(){
+  int accepted_req;
+
+  printf("Se deseja aceitar uma solicitação, digite o número correspondente:");
+  scanf("%d", &accepted_req);
+
+  
+
+
+
+
+  return 1;
+}
+
+
+
+
+
+
+
 
 ////////////////////////// MAIN //////////////////////////////
 
@@ -528,6 +548,7 @@ int main(int argc, char *argv[]) {
 	        printf("\n\n|----------LIST OF REQUESTED CHATS----------|");
           printReqs(chatReqList);
 	        printf("\n\n|-------------------------------------------|");
+          accept_chat();
 	        printf("\n\n");
           geth();
           break;
