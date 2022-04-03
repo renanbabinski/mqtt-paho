@@ -35,6 +35,12 @@ pthread_mutex_t lock_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t printf_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_t listen_ctrl;
 
+// GLOBALS
+int user_target_index = -1;
+int user_count = 0;
+char *user_target_name; 
+char *users[50];
+
 
 //Payload creation.
 char *createPayload(char* action, char* topic, char* source, char* message);
@@ -69,7 +75,7 @@ int list_menu(){
     system("clear");
   }
   printf("MENU DO CHAT: \n\n");
-  printf("1) LISTAR USUÁRIOS ONLINE \n");
+  printf("1) LISTAR USUÁRIOS\n");
   printf("2) CRIAÇÃO DE GRUPO \n");
   printf("3) VER GRUPOS CADASTRADOS\n");
   printf("4) INICIAR CONVERSA PRIVADA\n");
@@ -212,7 +218,11 @@ int listUsersStatus(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_
   //userTopic subscription.
   if(!onlyOnline){
     printf("Pressione ENTER para sair...\n\n");
+  }else{
+    printf("Pressione ENTER para continuar e selecionar um usuário...\n\n");
+    user_count = 0;
   }
+
 
 	MQTTClient_subscribe(client, "USERS/#", 0);
   // if (client != MQTTCLIENT_SUCCESS) return 0;
@@ -234,7 +244,10 @@ int forEachUser(void *context, char *topicName, int topicLen, MQTTClient_message
 
   if(online_mode){
     if(!strcmp(json_object_get_string(status), "ONLINE")){
-      printf("USUÁRIO: %s    STATUS: %s", json_object_get_string(user), json_object_get_string(status));
+      char *user_name = json_object_get_string(user);
+      users[user_count] = user_name;
+      printf("%d) USUÁRIO: %s    STATUS: %s", user_count, json_object_get_string(user), json_object_get_string(status));
+      user_count++;
     }
   }else{
     printf("USUÁRIO: %s    STATUS: %s", json_object_get_string(user), json_object_get_string(status));
@@ -324,41 +337,59 @@ int create_group(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_wil
 }
 
 int request_chat(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_willOptions wopts, char* userID){
-  // int client;
-
-  printf("Selecione um usuário online com o qual deseja conversar:\n");
+  int user_index;
+  char user_msg[200];
 
   if(!listUsersStatus(conn, opts, wopts, userID, 1)){
     printf("An error has occured while listing users status");
     exit(EXIT_FAILURE);
   }
+  printf("Selecione o número do usuário:\n");
+  scanf("%d", &user_index);
+  geth();
   
 
+  printf("Você selecionou: %s\n", users[user_index]);
+  printf("Escreva uma mensagem de solicitação para o usuário %s\n", users[user_index]);
 
+  fgets(user_msg, sizeof(user_msg), stdin);
 
-
-  // char* groupTopic = "GROUPS";
-  // char payload[100];
-
-  // MQTTClient_message pubmsg = MQTTClient_message_initializer;
-  // MQTTClient_deliveryToken dt;
-  // sprintf(payload, "{\"GROUP_NAME\" : \"%s\", \"OWNER\" : \"%s\", \"CREATED_TIME\" : \"2022-03-15\", \"N_MEMBERS\" : 1}", group_name, userID);
-  // if(DEBUG){
-  //   json_object *root = json_tokener_parse(payload);
-  //   printf("The json string: \n\n%s\n\n", json_object_to_json_string(root));
-  //   printf("The json object to string:\n\n%s\n", json_object_to_json_string_ext(root, JSON_C_TO_STRING_PRETTY));
-  // }
-  // pubmsg.payload = payload;
-  // pubmsg.payloadlen = strlen(pubmsg.payload);
-  // pubmsg.qos = 1;
-  // pubmsg.retained = 1;
-  // client = MQTTClient_connect(conn, &opts);
-	// if (client != MQTTCLIENT_SUCCESS) return 0;
-  // client = MQTTClient_publish(conn, groupTopic, pubmsg.payloadlen, pubmsg.payload, pubmsg.qos, pubmsg.retained, &dt);
+  // Removing new line at the end
+  user_msg[strcspn(user_msg, "\n")] = 0;
   
-  // if (client != MQTTCLIENT_SUCCESS) return 0;
 
-  // MQTTClient_disconnect(conn, 10000);
+  printf("Sua mensagem:\n%s\n", user_msg);
+
+  char user_control_topic[50];
+
+  strcpy(user_control_topic, users[user_index]);
+  strcat(user_control_topic,"_Control");
+
+  printf("Enviando solicitação no tópico de controle %s ...\n", user_control_topic);
+
+
+  int client;
+  char *action = "CHATREQ";
+  char *topic = user_control_topic;
+  char *source = userID;
+  char *message = user_msg;        
+  char *jsonRet = createPayload(action, topic, source, message);
+
+  MQTTClient_message pubmsg = MQTTClient_message_initializer;
+  MQTTClient_deliveryToken dt;
+ 
+  pubmsg.payload = jsonRet;
+  pubmsg.payloadlen = strlen(pubmsg.payload);
+  pubmsg.qos = 1;
+  pubmsg.retained = 0;
+  client = MQTTClient_connect(conn, &opts);
+	if (client != MQTTCLIENT_SUCCESS) return 0;
+
+  client = MQTTClient_publish(conn, topic, pubmsg.payloadlen, pubmsg.payload, pubmsg.qos, pubmsg.retained, &dt);
+  if (client != MQTTCLIENT_SUCCESS) return 0;
+
+  printf("Solicitação Enviada!");
+
   return 1;
 }
 
