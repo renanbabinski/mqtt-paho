@@ -540,8 +540,9 @@ int accept_chat(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_will
 // THREAD ->>> CHAT
 void* chat(void* chat_topic_void){
   system("clear");
-  char keyword[10];
+  char keyword[200];
   char id[100];
+  char payload[300];
   char *chat_topic = (char*)chat_topic_void;
   char *temp_topic = malloc(sizeof(char)*strlen(chat_topic));
   char *temp;
@@ -584,10 +585,23 @@ void* chat(void* chat_topic_void){
   MQTTClient_subscribe(client, chat_topic, QOS);
 
 
-  do{
+  while(1){
     fgets(keyword, sizeof(keyword), stdin);
     keyword[strcspn(keyword, "\n")] = 0;
-  } while(strcmp(keyword, "!quit") != 0);
+    sprintf(payload, "%s: %s", my_user_name, keyword);
+    if(strcmp(keyword, "!quit") != 0){
+      MQTTClient_message pubmsg = MQTTClient_message_initializer;
+      MQTTClient_deliveryToken dt;
+      pubmsg.payload = payload;
+      pubmsg.payloadlen = strlen(pubmsg.payload);
+      pubmsg.qos = 2;
+      pubmsg.retained = 0;
+      MQTTClient_publish(client, chat_topic, pubmsg.payloadlen, pubmsg.payload, pubmsg.qos, pubmsg.retained, &dt);
+    }else{
+      break;
+    }
+  }
+
   printf("Você saiu do chat! Pressione ENTER para voltar ao menu...");
 
   MQTTClient_disconnect(client, 10000);
@@ -595,6 +609,7 @@ void* chat(void* chat_topic_void){
 
   pthread_exit(NULL);
 }
+
 
 void join_chat(){
   int i = 1;
@@ -622,9 +637,7 @@ void join_chat(){
 int chat_arrived(void *context, char *topicName, int topicLen, MQTTClient_message *message){
     int i;
     char* payloadptr;
-    printf("Message arrived\n");
-    printf("     topic: %s\n", topicName);
-    printf("   message: ");
+    // printf("You:");
     payloadptr = message->payload;
     for(i=0; i<message->payloadlen; i++)
     {
