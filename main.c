@@ -65,6 +65,9 @@ void* listen_control(void* userID);
 int testSend(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_willOptions wopts, char* userID);
 //Chat Thread
 void* chat();
+//chat arrived callback
+int chat_arrived(void *context, char *topicName, int topicLen, MQTTClient_message *message);
+
 
 int geth(){                                        //PRESSIONE PARA CONTINUAR (PAUSE)
 	char s;
@@ -535,15 +538,60 @@ int accept_chat(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_will
 
 
 // THREAD ->>> CHAT
-void* chat(void* chat_topic){
-  char keyword[10];
+void* chat(void* chat_topic_void){
   system("clear");
-  printf("Você iniciou um chat no tópico %s\nDigite !quit a qualquer momento para sair do chat!", (char *) chat_topic);
+  char keyword[10];
+  char id[100];
+  char *chat_topic = (char*)chat_topic_void;
+  char *temp_topic = malloc(sizeof(char)*strlen(chat_topic));
+  char *temp;
+  
+  sprintf(temp_topic, "%s", chat_topic);
+
+  temp = strtok(temp_topic, "_");
+  char *my_user_name = temp;
+  temp = strtok(NULL, "_");
+  char *dst_user = temp;
+  temp = strtok(NULL, "_");
+  char *timestamp = temp;
+  
+  
+  sprintf(id, "listen_control_id_%s", chat_topic);
+
+
+  printf("Você iniciou um chat no tópico %s com o usuário %s\nDigite !quit a qualquer momento para sair do chat!\n", chat_topic, dst_user);
+
+
+  MQTTClient client;
+  MQTTClient_connectOptions conn_opts = MQTTClient_connectOptions_initializer;
+  
+  printf("Creating MQTTClient...\n");
+  MQTTClient_create(&client, ADDRESS, id, MQTTCLIENT_PERSISTENCE_NONE, NULL);
+  
+  conn_opts.keepAliveInterval = 20;
+  conn_opts.cleansession = 1;
+  printf("Setting callback...\n");
+  MQTTClient_setCallbacks(client, NULL, NULL, chat_arrived, NULL);
+
+  int rc;
+  printf("Connection...\n");
+  if ((rc = MQTTClient_connect(client, &conn_opts)) != MQTTCLIENT_SUCCESS){
+      printf("Failed to connect, return code %d\n", rc);
+      exit(EXIT_FAILURE);
+  }
+
+  printf("Subscribing...\n");
+  MQTTClient_subscribe(client, chat_topic, QOS);
+
+
   do{
     fgets(keyword, sizeof(keyword), stdin);
     keyword[strcspn(keyword, "\n")] = 0;
   } while(strcmp(keyword, "!quit") != 0);
   printf("Você saiu do chat! Pressione ENTER para voltar ao menu...");
+
+  MQTTClient_disconnect(client, 10000);
+  MQTTClient_destroy(&client);
 
   pthread_exit(NULL);
 }
@@ -570,6 +618,24 @@ void join_chat(){
 
   // return 0;
 }
+
+int chat_arrived(void *context, char *topicName, int topicLen, MQTTClient_message *message){
+    int i;
+    char* payloadptr;
+    printf("Message arrived\n");
+    printf("     topic: %s\n", topicName);
+    printf("   message: ");
+    payloadptr = message->payload;
+    for(i=0; i<message->payloadlen; i++)
+    {
+        putchar(*payloadptr++);
+    }
+    putchar('\n');
+    MQTTClient_freeMessage(&message);
+    MQTTClient_free(topicName);
+    return 1;
+}
+
 
 
 
