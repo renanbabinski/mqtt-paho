@@ -33,11 +33,15 @@ Trabalho: SIMULAÇÃO DE UM CHAT UM PRA UM E CHAT EM GRUPO
 listHead *chatReqList;
 pthread_mutex_t lock_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t printf_mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t chat_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_t listen_ctrl;
+pthread_t chat_thread;
 
 // GLOBALS
 int user_count = 0;
 char *users[50];
+int chat_count = 0;
+char *chats[50];
 
 //Payload creation.
 char *createPayload(char* action, char* topic, char* source, char* message);
@@ -59,6 +63,8 @@ int forEachUser(void *context, char *topicName, int topicLen, MQTTClient_message
 void* listen_control(void* userID);
 //Test send function.
 int testSend(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_willOptions wopts, char* userID);
+//Chat Thread
+void* chat();
 
 int geth(){                                        //PRESSIONE PARA CONTINUAR (PAUSE)
 	char s;
@@ -75,13 +81,17 @@ int list_menu(){
   printf("1) LISTAR USUÁRIOS\n");
   printf("2) CRIAÇÃO DE GRUPO \n");
   printf("3) VER GRUPOS CADASTRADOS\n");
-  printf("4) INICIAR CONVERSA PRIVADA\n");
-  printf("5) INICIAR CONVERSA EM GRUPO\n");
+  printf("4) SOLICITAR CONVERSA PRIVADA\n");
+  printf("5) SOLICITAR CONVERSA EM GRUPO\n");
   printf("6) MOSTRAR REQUISIÇÕES DE CHAT\n");
+  printf("7) INGRESSAR EM CHAT PRIVADO\n");
+  printf("8) INGRESSAR EM CHAT EM GRUPO\n");
+
   if (DEBUG){
     printf("98) TESTE ENVIAR REQUISIÇÃO\n");
     printf("99) REMOVER REQUISIÇÃO\n");
   }
+
   printf("0) SAIR DO PROGRAMA\n");
   printf("\n\n");
   scanf("%d", &menu);
@@ -298,8 +308,12 @@ int msgarrvd(void *context, char *topicName, int topicLen, MQTTClient_message *m
         timeStamp = json_object_object_get( root, "TIMESTAMP");
 
         printf("\n--------------------------------------------------");
-        printf("\npayload recebido: %s", json_object_get_string(payload));
+        printf("\n%s Aceitou sua solicitação!\nIngresse na conversa pelo tópico %s no MENU", json_object_get_string(source), json_object_get_string(payload));
         printf("\n--------------------------------------------------\n");
+
+        char *chat_topic = json_object_get_string(payload);
+        chats[chat_count] = chat_topic;
+        chat_count++;
 
       }
 
@@ -520,9 +534,42 @@ int accept_chat(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_will
 }
 
 
+// THREAD ->>> CHAT
+void* chat(void* chat_topic){
+  char keyword[10];
+  system("clear");
+  printf("Você iniciou um chat no tópico %s\nDigite !quit a qualquer momento para sair do chat!", (char *) chat_topic);
+  do{
+    fgets(keyword, sizeof(keyword), stdin);
+    keyword[strcspn(keyword, "\n")] = 0;
+  } while(strcmp(keyword, "!quit") != 0);
+  printf("Você saiu do chat! Pressione ENTER para voltar ao menu...");
+
+  pthread_exit(NULL);
+}
+
+void join_chat(){
+  int i = 1;
+  int chat_index;
+  printf("Chats Disponíveis:\n");
+  while(chats[i-1] != NULL){
+    printf("%d) Chat topic: %s\n", i, chats[i-1]);
+    i++;
+  }
+  printf("Selecione o número do chat para ingressar:\n");
+  scanf("%d", &chat_index);
+  geth();
+
+  printf("Você escolheu: %s\nPressione ENTER para ingressar no chat...", chats[chat_index-1]);
+
+  pthread_create(&chat_thread, NULL, chat, chats[chat_index-1]);
+  printf("\nThread: %ld\n", chat_thread);
+  pthread_join(chat_thread, NULL);
 
 
 
+  // return 0;
+}
 
 
 
@@ -606,6 +653,17 @@ int main(int argc, char *argv[]) {
 	        printf("\n\n|-------------------------------------------|\n");
           accept_chat(conn, opts, wopts, userID);
 	        printf("\n\n");
+          geth();
+          break;
+
+        case 7:
+          system("clear");
+          join_chat();
+          geth();
+          break;
+
+        case 8:
+          printf("\nOPÇÃO 8!\n");
           geth();
           break;
 
