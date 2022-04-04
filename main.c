@@ -27,7 +27,7 @@ Trabalho: SIMULAÇÃO DE UM CHAT UM PRA UM E CHAT EM GRUPO
 #define PAYLOAD     "Hello World!"
 #define QOS         1
 #define TIMEOUT     10000L
-#define DEBUG       0
+#define DEBUG       1
 #define INFO        0
 
 listHead *chatReqList;
@@ -38,6 +38,7 @@ pthread_t listen_ctrl;
 // GLOBALS
 int user_count = 0;
 char *users[50];
+char *groups[50];
 
 //Payload creation.
 char *createPayload(char* action, char* topic, char* source, char* message);
@@ -52,11 +53,17 @@ int listUsersStatus(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_
 //Message arrived function
 int msgarrvd(void *context, char *topicName, int topicLen, MQTTClient_message *message);
 //Group creation
-int create_group(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_willOptions wopts, char* userID);
+int create_group(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_willOptions wopts, char* userID, char *group_name);
 //List Each User and Status
 int forEachUser(void *context, char *topicName, int topicLen, MQTTClient_message *message);
 //Thread user control.
 void* listen_control(void* userID);
+//Request to join a group.
+int join_group(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_willOptions wopts, char* userID, char *group_name);
+//List data of each group.
+int listGroups(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_willOptions wopts, char* userID);
+//For each group, prints its data.
+int forEachGroup(void *context, char *topicName, int topicLen, MQTTClient_message *message);
 //Test send function.
 int testSend(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_willOptions wopts, char* userID);
 
@@ -73,11 +80,10 @@ int list_menu(){
   }
   printf("MENU DO CHAT: \n\n");
   printf("1) LISTAR USUÁRIOS\n");
-  printf("2) CRIAÇÃO DE GRUPO \n");
+  printf("2) INICIAR CONVERSA EM GRUPO\n");
   printf("3) VER GRUPOS CADASTRADOS\n");
   printf("4) INICIAR CONVERSA PRIVADA\n");
-  printf("5) INICIAR CONVERSA EM GRUPO\n");
-  printf("6) MOSTRAR REQUISIÇÕES DE CHAT\n");
+  printf("5) MOSTRAR REQUISIÇÕES DE CHAT\n");
   if (DEBUG){
     printf("98) TESTE ENVIAR REQUISIÇÃO\n");
     printf("99) REMOVER REQUISIÇÃO\n");
@@ -303,37 +309,54 @@ int msgarrvd(void *context, char *topicName, int topicLen, MQTTClient_message *m
 
       }
 
-      //MQTTClient_freeMessage(&message);
-      //MQTTClient_free(topicName);
+      MQTTClient_freeMessage(&message);
+      MQTTClient_free(topicName);
       
     //Locks mutex for further use.
     pthread_mutex_unlock(&lock_mutex);
     return 1;
 }
 
-int create_group(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_willOptions wopts, char* userID){
-  char* group_name = "TEST_GROUP";
+int create_group(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_willOptions wopts, char* userID, char *group_name){
   int client;
 
-  char* groupTopic = "GROUPS";
-  char payload[100];
+  char groupTopic[50];
+  char payload[1000];
 
+  time_t     now;
+  struct tm  ts;
+  char       createdAt[80];
+  time(&now);
+  ts = *localtime(&now);
+  strftime(createdAt, sizeof(createdAt), "%Y-%m-%d %H:%M:%S", &ts);
+  
   MQTTClient_message pubmsg = MQTTClient_message_initializer;
   MQTTClient_deliveryToken dt;
-  sprintf(payload, "{\"GROUP_NAME\" : \"%s\", \"OWNER\" : \"%s\", \"CREATED_TIME\" : \"2022-03-15\", \"N_MEMBERS\" : 1}", group_name, userID);
+
+  sprintf(payload, "{\"GROUP_NAME\" : \"%s\", \"OWNER\" : \"%s\", \"CREATED_TIME\" : \"%s\", \"N_MEMBERS\" : 1 }", group_name, userID, createdAt);
+  json_object *root = json_tokener_parse(payload);
+
+  struct json_object *arrayMembers;
+  arrayMembers = json_object_new_array();
+  json_object_array_add(arrayMembers, json_object_new_string(userID));
+  json_object_object_add(root, "MEMBERS_LIST", arrayMembers);
+
   if(DEBUG){
     json_object *root = json_tokener_parse(payload);
     printf("The json string: \n\n%s\n\n", json_object_to_json_string(root));
     printf("The json object to string:\n\n%s\n", json_object_to_json_string_ext(root, JSON_C_TO_STRING_PRETTY));
   }
+
   pubmsg.payload = payload;
   pubmsg.payloadlen = strlen(pubmsg.payload);
   pubmsg.qos = 1;
   pubmsg.retained = 1;
+  
   client = MQTTClient_connect(conn, &opts);
 	if (client != MQTTCLIENT_SUCCESS) return 0;
-  client = MQTTClient_publish(conn, groupTopic, pubmsg.payloadlen, pubmsg.payload, pubmsg.qos, pubmsg.retained, &dt);
   
+  sprintf(groupTopic, "GROUPS/%s", group_name);
+  client = MQTTClient_publish(conn, groupTopic, pubmsg.payloadlen, pubmsg.payload, pubmsg.qos, pubmsg.retained, &dt);
   if (client != MQTTCLIENT_SUCCESS) return 0;
 
   MQTTClient_disconnect(conn, 10000);
@@ -519,8 +542,119 @@ int accept_chat(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_will
   return 1;
 }
 
+/*int join_group(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_willOptions wopts, char* userID, char *group_name){
+  int client;
+
+  char* groupTopic = "GROUPS";
+  char payload[1000];
+
+  time_t     now;
+  struct tm  ts;
+  char       createdAt[80];
+  time(&now);
+  ts = *localtime(&now);
+  strftime(createdAt, sizeof(createdAt), "%Y-%m-%d %H:%M:%S", &ts);
+  
+  MQTTClient_message pubmsg = MQTTClient_message_initializer;
+  MQTTClient_deliveryToken dt;
+
+  sprintf(payload, "{\"GROUP_NAME\" : \"%s\", \"OWNER\" : \"%s\", \"CREATED_TIME\" : \"%s\", \"N_MEMBERS\" : 1 }", group_name, userID, createdAt);
+  json_object *root = json_tokener_parse(payload);
+
+  struct json_object *arrayMembers;
+  arrayMembers = json_object_new_array();
+  json_object_array_add(arrayMembers, json_object_new_string(userID));
+  json_object_object_add(root, "MEMBERS_LIST", arrayMembers);
+
+  if(DEBUG){
+    json_object *root = json_tokener_parse(payload);
+    printf("The json string: \n\n%s\n\n", json_object_to_json_string(root));
+    printf("The json object to string:\n\n%s\n", json_object_to_json_string_ext(root, JSON_C_TO_STRING_PRETTY));
+  }
+
+  pubmsg.payload = payload;
+  pubmsg.payloadlen = strlen(pubmsg.payload);
+  pubmsg.qos = 1;
+  pubmsg.retained = 1;
+  
+  client = MQTTClient_connect(conn, &opts);
+	if (client != MQTTCLIENT_SUCCESS) return 0;
+
+  client = MQTTClient_publish(conn, groupTopic, pubmsg.payloadlen, pubmsg.payload, pubmsg.qos, pubmsg.retained, &dt);
+  if (client != MQTTCLIENT_SUCCESS) return 0;
+
+  MQTTClient_disconnect(conn, 10000);
+  return 1;
+}*/
 
 
+int listGroups(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_willOptions wopts, char* userID){
+  MQTTClient client;
+  MQTTClient_connectOptions conn_opts = MQTTClient_connectOptions_initializer;
+  int rc;
+  int ch;
+  MQTTClient_create(&client, ADDRESS, userID, MQTTCLIENT_PERSISTENCE_NONE, NULL);
+
+  conn_opts.keepAliveInterval = 20;
+  conn_opts.cleansession = 1;
+  
+  MQTTClient_setCallbacks(client, NULL, NULL, forEachGroup, NULL);
+  if ((rc = MQTTClient_connect(client, &conn_opts)) != MQTTCLIENT_SUCCESS)
+  {
+      printf("Failed to connect, return code %d\n", rc);
+      exit(EXIT_FAILURE);
+  }
+
+	MQTTClient_subscribe(client, "GROUPS/#", 0);
+  // if (client != MQTTCLIENT_SUCCESS) return 0;
+  do{
+    ch = getchar();
+  } while(ch!='\n');
+
+  MQTTClient_disconnect(client, 10000);
+  MQTTClient_destroy(&client);
+
+  return 1;
+}
+
+int forEachGroup(void *context, char *topicName, int topicLen, MQTTClient_message *message){
+  json_object *root                 = json_tokener_parse((char *)message->payload);
+  json_object *groupName            = json_object_object_get(root, "GROUP");
+  json_object *groupOnwer           = json_object_object_get(root, "OWNER");
+  json_object *groupCreatedAt       = json_object_object_get(root, "CREATED_TIME");
+  json_object *groupMembersQuantity = json_object_object_get(root, "N_MEMBERS");
+  json_object *groupListMembers     = json_object_object_get(root, "MEMBERS_LIST");
+  int group_count = 1;
+
+
+  char *group_name = json_object_get_string(groupName);
+  groups[group_count] = group_name;
+//  printf("%d) USUÁRIO: %s    STATUS: %s\n", user_count, json_object_get_string(user), json_object_get_string(status));
+/*
+  
+  struct json_object *med_obj, *medi_array, *medi_array_obj, *medi_array_obj_name;
+  int arraylen, i;
+  charname[10] = {0};
+  static const char filename[] = "xyz.txt";
+  medi_array = json_object_object_get(root, "medication");
+
+  // medi_array is an array of objects
+  arraylen = json_object_array_length(medi_array);
+
+  for (i = 0; i < arraylen; i++) {
+    // get the i-th object in medi_array
+    medi_array_obj = json_object_array_get_idx(medi_array, i);
+    // get the name attribute in the i-th object
+    medi_array_obj_name = json_object_object_get(medi_array_obj, "name");
+    // print out the name attribute
+    printf("name=%s\n", json_object_get_string(medi_array_obj_name));
+  }
+*/
+
+  MQTTClient_freeMessage(&message);
+  MQTTClient_free(topicName);
+  return 1;
+}
 
 
 
@@ -534,11 +668,13 @@ int main(int argc, char *argv[]) {
 	MQTTClient_willOptions wopts = MQTTClient_willOptions_initializer;
   chatReqList = malloc(sizeof(listHead));
   chatReqList->listSize = 0;
-  
-  int menu;
+
+  int menu, menuGrp, create=3;
   char* userID = argv[1];
 
   char controlTopic[50];
+  char group_name[50];
+
 
   strcpy(controlTopic, userID);
   strcat(controlTopic,"_Control");
@@ -572,11 +708,59 @@ int main(int argc, char *argv[]) {
           break;
 
         case 2:
-          if(!create_group(conn, opts, wopts, userID)){
-            printf("An error has occured while creating group!");
-            menu = 0;
-          }
+          system("clear");
+          printf("\nOPÇÕES PARA GRUPOS");
+          printf("\n1) Criar um Grupo.");
+          printf("\n2) Entrar em um Grupo.");
+          printf("\nOpção: ");
+
+          scanf("%d", &menuGrp);
           geth();
+          setbuf(stdin, NULL);
+          switch (menuGrp){
+            case 1:
+              printf("\n\nDigite um nome para o grupo a ser criado: ");
+              fgets(group_name, sizeof(group_name), stdin);
+              //Removing new line at the end.
+              group_name[strcspn(group_name, "\n")] = 0;
+              
+              //Verify if group name already exists.
+              /*if(existsGroup(group_name)){
+                //If exists, ask if want to join.
+                printf("\n\nGrupo digitado já existe. Deseja solicitar entrada no grupo?");
+                printf("\n1) Sim.");
+                printf("\n2) Não.");
+
+                scanf("%d", &create);
+                geth();
+                setbuf(stdin, NULL);
+
+              } else {*/
+                //Else, create.
+                create = 1;
+              //}
+
+              //Create group.
+              if(create == 1 && !create_group(conn, opts, wopts, userID, group_name)){
+                printf("An error has occured while creating group!");
+                menu = 0;
+
+              //Join group.
+              } else if (create == 2 /*&& join_group(conn, opts, wopts, userID, group_name)*/){
+                printf("An error has occured while joining group!");
+                menu = 0;
+              }
+            case 2:
+
+              printf("Digite o código do grupo que deseja entrar: ");
+              fgets(group_name, sizeof(group_name), stdin);
+              if(!create_group(conn, opts, wopts, userID, group_name)){
+                printf("An error has occured while creating group!");
+                menu = 0;
+              }
+            default:
+            break;
+          }
 
           break;
 
@@ -668,3 +852,6 @@ int testSend(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_willOpt
 
   return 1;
 }
+
+
+
