@@ -43,6 +43,13 @@ char *users[50];
 int chat_count = 0;
 char *chats[50];
 
+// CHAT STRUCT
+typedef struct chat_context
+  {
+    char *topic;
+    int mode;
+  }chat_context;
+
 //Payload creation.
 char *createPayload(char* action, char* topic, char* source, char* message);
 //User initialization.
@@ -67,6 +74,8 @@ int testSend(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_willOpt
 void* chat();
 //chat arrived callback
 int chat_arrived(void *context, char *topicName, int topicLen, MQTTClient_message *message);
+//Join Chat
+void join_chat(int mode);
 
 
 int geth(){                                        //PRESSIONE PARA CONTINUAR (PAUSE)
@@ -479,7 +488,7 @@ int accept_chat(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_will
   time_t timeStamp;
   time(&timeStamp);
   char user_control_topic[50];
-  char chat_topic[50];
+  char* chat_topic = malloc(sizeof(char)* 100);
   char *timestamp = malloc(50 * sizeof(char));
   sprintf(timestamp, "%ld", timeStamp);
 
@@ -491,15 +500,9 @@ int accept_chat(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_will
 
     user_name = popReqUserName(chatReqList, accepted_req);
 
-    printf("Você aceitou a solicitação %d e conversará com o Usuário %s\n", accepted_req, user_name);
-
-    
-    printf("Memory allocated!\n");
-
     strcpy(user_control_topic, user_name);
     strcat(user_control_topic,"_Control");
 
-    printf("Nome do tópico de controle: %s\n", user_control_topic);
 
     //Defined Topic name. Format: X_Y_TIMESTAMP
     strcpy(chat_topic, user_name);
@@ -508,7 +511,14 @@ int accept_chat(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_will
     strcat(chat_topic, "_");
     strcat(chat_topic, timestamp);
 
-    printf("Nome do tópico do chat: %s\n", chat_topic);
+    printf("\n--------------------------------------------------");
+    printf("\nVocê aceitou a solicitação para conversar com %s!\nIngresse na conversa pelo tópico %s no MENU", user_name, chat_topic);
+    printf("\n--------------------------------------------------\n");
+
+    char *topic_aux = malloc(sizeof(chat_topic));
+    sprintf(topic_aux, "%s", chat_topic);
+    chats[chat_count] = topic_aux;
+    chat_count++;
 
     int client;
     char *action = "ACKCHAT";
@@ -531,6 +541,7 @@ int accept_chat(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_will
     if (client != MQTTCLIENT_SUCCESS) return 0;
 
   }
+  join_chat(1);
   geth();
   
   return 1;
@@ -538,12 +549,14 @@ int accept_chat(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_will
 
 
 // THREAD ->>> CHAT
-void* chat(void* chat_topic_void){
+void* chat(void* chat_struct){
   system("clear");
+  chat_context *chat_c = (chat_context*)chat_struct;
+
   char keyword[200];
   char id[100];
   char payload[300];
-  char *chat_topic = (char*)chat_topic_void;
+  char *chat_topic = chat_c->topic;
   char *temp_topic = malloc(sizeof(char)*strlen(chat_topic));
   char *temp;
   
@@ -556,11 +569,17 @@ void* chat(void* chat_topic_void){
   temp = strtok(NULL, "_");
   char *timestamp = temp;
   
-  
-  sprintf(id, "listen_control_id_%s", chat_topic);
+  if(chat_c->mode == 0){
+    sprintf(id, "listen_chat_id_%s", my_user_name);
+  }else{
+    sprintf(id, "listen_chat_id_%s", dst_user);
+  }
 
-
-  printf("Você iniciou um chat no tópico %s com o usuário %s\nDigite !quit a qualquer momento para sair do chat!\n", chat_topic, dst_user);
+  if(chat_c->mode == 0){
+    printf("Você iniciou um chat no tópico %s com o usuário %s\nDigite !quit a qualquer momento para sair do chat!\n", chat_topic, dst_user);
+  }else{
+    printf("Você iniciou um chat no tópico %s com o usuário %s\nDigite !quit a qualquer momento para sair do chat!\n", chat_topic, my_user_name);
+  }
 
 
   MQTTClient client;
@@ -588,7 +607,11 @@ void* chat(void* chat_topic_void){
   while(1){
     fgets(keyword, sizeof(keyword), stdin);
     keyword[strcspn(keyword, "\n")] = 0;
-    sprintf(payload, "%s: %s", my_user_name, keyword);
+    if(chat_c->mode == 0){
+      sprintf(payload, "%s: %s", my_user_name, keyword);
+    }else{
+      sprintf(payload, "%s: %s", dst_user, keyword);
+    }
     if(strcmp(keyword, "!quit") != 0){
       MQTTClient_message pubmsg = MQTTClient_message_initializer;
       MQTTClient_deliveryToken dt;
@@ -611,7 +634,10 @@ void* chat(void* chat_topic_void){
 }
 
 
-void join_chat(){
+void join_chat(int mode){
+  chat_context *chat_c = malloc(sizeof(chat_context));
+  chat_c->mode = mode;
+  
   int i = 1;
   int chat_index;
   printf("Chats Disponíveis:\n");
@@ -625,13 +651,13 @@ void join_chat(){
 
   printf("Você escolheu: %s\nPressione ENTER para ingressar no chat...", chats[chat_index-1]);
 
-  pthread_create(&chat_thread, NULL, chat, chats[chat_index-1]);
+  chat_c->topic = chats[chat_index-1];
+
+  pthread_create(&chat_thread, NULL, chat, chat_c);
   printf("\nThread: %ld\n", chat_thread);
   pthread_join(chat_thread, NULL);
 
 
-
-  // return 0;
 }
 
 int chat_arrived(void *context, char *topicName, int topicLen, MQTTClient_message *message){
@@ -737,7 +763,7 @@ int main(int argc, char *argv[]) {
 
         case 7:
           system("clear");
-          join_chat();
+          join_chat(0);
           geth();
           break;
 
