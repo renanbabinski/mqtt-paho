@@ -488,8 +488,8 @@ int accept_chat(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_will
   time_t timeStamp;
   time(&timeStamp);
   char user_control_topic[50];
-  char* chat_topic = malloc(sizeof(char)* 100);
-  char *timestamp = malloc(50 * sizeof(char));
+  char* chat_topic = malloc(sizeof(char)* 200);
+  char *timestamp = malloc(200 * sizeof(char));
   sprintf(timestamp, "%ld", timeStamp);
 
   printf("Se deseja aceitar uma solicitação, digite o número correspondente:\nOu digite 0 para sair...\n");
@@ -515,7 +515,7 @@ int accept_chat(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_will
     printf("\nVocê aceitou a solicitação para conversar com %s!\nIngresse na conversa pelo tópico %s no MENU", user_name, chat_topic);
     printf("\n--------------------------------------------------\n");
 
-    char *topic_aux = malloc(sizeof(chat_topic));
+    char *topic_aux = malloc(sizeof(char)*200);
     sprintf(topic_aux, "%s", chat_topic);
     chats[chat_count] = topic_aux;
     chat_count++;
@@ -540,8 +540,9 @@ int accept_chat(MQTTClient conn, MQTTClient_connectOptions opts, MQTTClient_will
     client = MQTTClient_publish(conn, topic, pubmsg.payloadlen, pubmsg.payload, pubmsg.qos, pubmsg.retained, &dt);
     if (client != MQTTCLIENT_SUCCESS) return 0;
 
+    join_chat(1);
   }
-  join_chat(1);
+  
   geth();
   
   return 1;
