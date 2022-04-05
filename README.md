@@ -44,6 +44,16 @@ Aplicação de chat implementada sobre o protocolo MQTT.
 
 - É possivel listar os status de todos os usuários (Sem formatação, apenas JSON como foi publicado)
 
+## Compilação:
+
+    gcc main.c -o mqtt_exemplo -lpaho-mqtt3c -ljson-c -lpthread -Wall
+
+  Após, execute com:
+
+    ./mqtt_exemplo Fulano
+
+  Onde "Fulano" é o nome do usuário
+
 ## Funções:
 
 ### Montagem do Payload:
@@ -71,3 +81,27 @@ Aplicação de chat implementada sobre o protocolo MQTT.
 ```
   free(jsonRet);
 ```
+
+## Estrutura do Payload do tópico de controle
+
+    {
+		“ACTION” : “CHAVE DA AÇÃO”,
+		“TOPIC”: “TOPICO”,
+		“TIMESTAMP”: “TIME STAMP DA REQUISIÇÃO”,
+		“SOURCE”: “USUÁRIO ORIGEM”,
+		“PAYLOAD”: “MENSAGEM ENVIADA”
+	}
+
+  Descrição dos campos:
+
+    ACTION:
+      REQCHAT: Requisição de Chat privado.
+      ACKCHAT: Confirmação da requisição.
+    TOPIC:
+      Nome do tópico para controle de chat/grupo.
+    TIMESTAMP:
+      Data e hora informativas.
+    SOURCE:
+      Usuário originador da mensagem.
+    PAYLOAD:
+      Mensagem enviada.
